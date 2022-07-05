@@ -1,6 +1,6 @@
 // $OpenLDAP$
 /*
- * Copyright 2000-2020 The OpenLDAP Foundation, All Rights Reserved.
+ * Copyright 2000-2022 The OpenLDAP Foundation, All Rights Reserved.
  * COPYING RESTRICTIONS APPLY, see COPYRIGHT file
  */
 
@@ -61,7 +61,7 @@ class LDAPRequest{
         void unbind() const; 
 
         /**
-         * This method encodes the request an calls the apprpriate
+         * This method encodes the request an calls the appropriate
          * functions of the C-API to send the Request to a LDAP-Server
          */
         virtual LDAPMessageQueue* sendRequest()=0;

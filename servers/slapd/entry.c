@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,7 +248,7 @@ str2entry2( char *s, int checkvals )
 				rc = slap_bv2ad( type+i, &ad, &text );
 	
 				if( rc != LDAP_SUCCESS ) {
-					int wtool = ( slapMode & (SLAP_TOOL_MODE|SLAP_TOOL_READONLY) ) == SLAP_TOOL_MODE;
+					int wtool = ( slapMode & (SLAP_TOOL_MODE|SLAP_TOOL_READONLY|SLAP_TOOL_NO_SCHEMA_CHECK) ) == SLAP_TOOL_MODE;
 					Debug( wtool ? LDAP_DEBUG_ANY : LDAP_DEBUG_TRACE,
 						"<= str2entry: str2ad(%s): %s\n", type[i].bv_val, text );
 					if( wtool ) {
@@ -759,7 +759,7 @@ int entry_encode(Entry *e, struct berval *bv)
 
 /* Retrieve an Entry that was stored using entry_encode above.
  * First entry_header must be called to decode the size of the entry.
- * Then a single block of memory must be malloc'd to accomodate the
+ * Then a single block of memory must be malloc'd to accommodate the
  * bervals and the bulk data. Next the bulk data is retrieved from
  * the DB and parsed by entry_decode.
  *
@@ -845,7 +845,8 @@ int entry_decode(EntryHeader *eh, Entry **e)
 	a = x->e_attrs;
 	bptr = (BerVarray)eh->bv.bv_val;
 
-	while ((i = entry_getlen(&ptr))) {
+	while (((char *)ptr - eh->bv.bv_val < eh->bv.bv_len) &&
+	       (i = entry_getlen(&ptr))) {
 		struct berval bv;
 		bv.bv_len = i;
 		bv.bv_val = (char *) ptr;

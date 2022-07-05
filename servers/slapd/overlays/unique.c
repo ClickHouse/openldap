@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2004-2020 The OpenLDAP Foundation.
+ * Copyright 2004-2022 The OpenLDAP Foundation.
  * Portions Copyright 2004,2006-2007 Symas Corporation.
  * All rights reserved.
  *
@@ -31,7 +31,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 
 #define UNIQUE_DEFAULT_URI ("ldap:///??sub")
 
@@ -87,7 +87,7 @@ static ConfigDriver unique_cf_strict;
 static ConfigDriver unique_cf_uri;
 
 static ConfigTable uniquecfg[] = {
-	{ "unique_base", "basedn", 2, 2, 0, ARG_DN|ARG_MAGIC|UNIQUE_BASE,
+	{ "unique_base", "basedn", 2, 2, 0, ARG_DN|ARG_QUOTE|ARG_MAGIC|UNIQUE_BASE,
 	  unique_cf_base, "( OLcfgOvAt:10.1 NAME 'olcUniqueBase' "
 	  "DESC 'Subtree for uniqueness searches' "
 	  "EQUALITY distinguishedNameMatch "
@@ -551,6 +551,13 @@ unique_cf_attrs( ConfigArgs *c )
 		rc = 0;
 		break;
 	case LDAP_MOD_ADD:
+		if ( c->argc > 2 ) {
+			Debug ( LDAP_DEBUG_CONFIG|LDAP_DEBUG_NONE, "unique config: "
+				"Supplying multiple names in a single %s value is unsupported "
+				"and will be disallowed in a future version\n",
+				c->argv[0] );
+		}
+		/* FALLTHRU */
 	case SLAP_CONFIG_ADD:
 		if ( domains ) {
 			snprintf( c->cr_msg, sizeof( c->cr_msg ),
@@ -996,6 +1003,7 @@ unique_search(
 	nop->ors_tlimit	= SLAP_NO_LIMIT;
 	nop->ors_attrs	= slap_anlist_no_attrs;
 	nop->ors_attrsonly = 1;
+	memset( nop->o_ctrlflag, 0, sizeof( nop->o_ctrlflag ));
 
 	uq.ndn = &op->o_req_ndn;
 

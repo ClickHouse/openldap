@@ -59,11 +59,10 @@ read_and_send_results(
 	while ( !feof(fp) ) {
 		errno = 0;
 		if ( fgets( line, sizeof(line), fp ) == NULL ) {
-			int saved_errno = errno;
 			if ( errno == EINTR ) continue;
 
 			Debug( LDAP_DEBUG_ANY, "shell: fgets failed: %s (%d)\n",
-				AC_STRERROR_R(saved_errno, ebuf, sizeof ebuf), saved_errno );
+				AC_STRERROR_R(errno, ebuf, sizeof ebuf), errno );
 			break;
 		}
 

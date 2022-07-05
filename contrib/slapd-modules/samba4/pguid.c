@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * Portions Copyright 2008 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -29,7 +29,7 @@
 #include "ac/socket.h"
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 
 #include "lutil.h"
 

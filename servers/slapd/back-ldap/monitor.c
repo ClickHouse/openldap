@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2003-2020 The OpenLDAP Foundation.
+ * Copyright 2003-2022 The OpenLDAP Foundation.
  * Portions Copyright 1999-2003 Howard Chu.
  * Portions Copyright 2000-2003 Pierangelo Masarati.
  * All rights reserved.
@@ -32,7 +32,7 @@
 #include "lutil.h"
 #include "back-ldap.h"
 
-#include "config.h"
+#include "slap-config.h"
 
 static ObjectClass		*oc_olmLDAPDatabase;
 static ObjectClass		*oc_olmLDAPConnection;
@@ -540,6 +540,7 @@ ldap_back_monitor_conn_create(
 
 	struct ldap_back_monitor_conn_arg *arg;
 	int conn_type;
+	TAvlnode *edge;
 
 	assert( e_parent->e_private != NULL );
 
@@ -564,8 +565,13 @@ ldap_back_monitor_conn_create(
 		}
 	}
 
-	avl_apply( li->li_conninfo.lai_tree, (AVL_APPLY)ldap_back_monitor_conn_entry,
-		arg, -1, AVL_INORDER );
+	edge = ldap_tavl_end( li->li_conninfo.lai_tree, TAVL_DIR_LEFT );
+	while ( edge ) {
+		TAvlnode *next = ldap_tavl_next( edge, TAVL_DIR_RIGHT );
+		ldapconn_t *lc = (ldapconn_t *)edge->avl_data;
+		ldap_back_monitor_conn_entry( lc, arg );
+		edge = next;
+	}
 
 	ch_free( arg );
 

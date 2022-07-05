@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@
 #include <ac/time.h>
 #include <ac/param.h>
 
-#include "avl.h"
+#include "ldap_avl.h"
 
 #ifndef ldap_debug
 #define ldap_debug slap_debug
@@ -55,6 +55,8 @@
 #include "ldap_pvt.h"
 #include "ldap_pvt_thread.h"
 #include "ldap_queue.h"
+
+#include "lutil.h"
 
 LDAP_BEGIN_DECL
 
@@ -141,6 +143,7 @@ LDAP_BEGIN_DECL
 
 #define SLAP_CONN_MAX_PENDING_DEFAULT	100
 #define SLAP_CONN_MAX_PENDING_AUTH	1000
+#define SLAP_MAX_FILTER_DEPTH_DEFAULT	1000
 
 #define SLAP_TEXT_BUFLEN (256)
 
@@ -155,6 +158,9 @@ LDAP_BEGIN_DECL
 
 /* pseudo error code indicating async operation */
 #define SLAPD_ASYNCOP (-1027)
+
+/* pseudo error code to suppress frontend response */
+#define SLAPD_NO_REPLY (-1028)
 
 /* We assume "C" locale, that is US-ASCII */
 #define ASCII_SPACE(c)	( (c) == ' ' )
@@ -370,21 +376,7 @@ typedef struct Operation Operation;
 typedef struct SlapReply SlapReply;
 /* end of forward declarations */
 
-typedef union Sockaddr {
-	struct sockaddr sa_addr;
-	struct sockaddr_in sa_in_addr;
-#ifdef LDAP_PF_INET6
-	struct sockaddr_storage sa_storage;
-	struct sockaddr_in6 sa_in6_addr;
-#endif
-#ifdef LDAP_PF_LOCAL
-	struct sockaddr_un sa_un_addr;
-#endif
-} Sockaddr;
-
-#ifdef LDAP_PF_INET6
 extern int slap_inet4or6;
-#endif
 
 struct OidMacro {
 	struct berval som_oid;
@@ -1615,6 +1607,7 @@ LDAP_SLAPD_V (int) slapMode;
 #define	SLAP_TOOL_QUICK		0x0800
 #define SLAP_TOOL_NO_SCHEMA_CHECK	0x1000
 #define SLAP_TOOL_VALUE_CHECK	0x2000
+#define SLAP_TOOL_DRYRUN	0x4000
 
 #define SLAP_SERVER_RUNNING	0x8000
 
@@ -1622,6 +1615,22 @@ LDAP_SLAPD_V (int) slapMode;
 #define SB_TLS_OFF		0
 #define SB_TLS_ON		1
 #define SB_TLS_CRITICAL		2
+
+enum slaptool {
+	SLAPADD=1,	/* LDIF -> database tool */
+	SLAPCAT,	/* database -> LDIF tool */
+	SLAPDN,		/* DN check w/ syntax tool */
+	SLAPINDEX,	/* database index tool */
+	SLAPMODIFY,	/* database modify tool */
+	SLAPPASSWD,	/* password generation tool */
+	SLAPSCHEMA,	/* schema checking tool */
+	SLAPTEST,	/* slapd.conf test tool */
+	SLAPAUTH,	/* test authz-regexp and authc/authz stuff */
+	SLAPACL,	/* test acl */
+	SLAPLAST
+};
+
+LDAP_SLAPD_V(enum slaptool) slapTool;
 
 typedef struct slap_keepalive {
 	int sk_idle;
@@ -1644,6 +1653,7 @@ typedef struct slap_bindconf {
 	struct berval sb_authcId;
 	struct berval sb_authzId;
 	slap_keepalive sb_keepalive;
+	unsigned int sb_tcp_user_timeout;
 #ifdef HAVE_TLS
 	void *sb_tls_ctx;
 	char *sb_tls_cert;
@@ -1786,7 +1796,7 @@ LDAP_TAILQ_HEAD( be_pcl, slap_csn_entry );
 #define	SLAP_MAX_CIDS	32	/* Maximum number of supported controls */
 #endif
 
-struct ConfigOCs;	/* config.h */
+struct ConfigOCs;	/* slap-config.h */
 
 struct BackendDB {
 	BackendInfo	*bd_info;	/* pointer to shared backend info */
@@ -1872,6 +1882,7 @@ struct BackendDB {
 #define SLAP_DBFLAG_MULTI_SHADOW	0x80000U /* uses multi-provider */
 #define SLAP_DBFLAG_DISABLED	0x100000U
 #define SLAP_DBFLAG_LASTBIND	0x200000U
+#define SLAP_DBFLAG_OPEN	0x400000U	/* db is currently open */
 	slap_mask_t	be_flags;
 #define SLAP_DBFLAGS(be)			((be)->be_flags)
 #define SLAP_NOLASTMOD(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_NOLASTMOD)
@@ -1899,6 +1910,7 @@ struct BackendDB {
 #define SLAP_SINGLE_SHADOW(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_SINGLE_SHADOW)
 #define SLAP_MULTIPROVIDER(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_MULTI_SHADOW)
 #define SLAP_DBCLEAN(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_CLEAN)
+#define SLAP_DBOPEN(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_OPEN)
 #define SLAP_DBACL_ADD(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_ACL_ADD)
 #define SLAP_SYNC_SUBENTRY(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_SYNC_SUBENTRY)
 
@@ -1979,6 +1991,8 @@ struct BackendDB {
 	slap_access_t	be_dfltaccess;	/* access given if no acl matches	   */
 	AttributeName	*be_extra_anlist;	/* attributes that need to be added to search requests (ITS#6513) */
 
+	unsigned int be_lastbind_precision;
+
 	/* Consumer Information */
 	struct berval be_update_ndn;	/* allowed to make changes (in replicas) */
 	BerVarray	be_update_refs;	/* where to refer modifying clients to */
@@ -2005,7 +2019,7 @@ typedef int (BI_config) LDAP_P((BackendInfo *bi,
 	const char *fname, int lineno,
 	int argc, char **argv));
 
-typedef struct config_reply_s ConfigReply; /* config.h */
+typedef struct config_reply_s ConfigReply; /* slap-config.h */
 typedef int (BI_db_func) LDAP_P((Backend *bd, ConfigReply *cr));
 typedef BI_db_func BI_db_init;
 typedef BI_db_func BI_db_open;
@@ -2057,6 +2071,8 @@ typedef struct req_modrdn_s {
 	struct berval rs_nnewrdn;
 	struct berval *rs_newSup;
 	struct berval *rs_nnewSup;
+	struct berval rs_newDN;
+	struct berval rs_nnewDN;
 } req_modrdn_s;
 
 typedef struct req_add_s {
@@ -2347,6 +2363,7 @@ struct BackendInfo {
 #define SLAP_BFLAG_SUBENTRIES		0x4000U
 #define SLAP_BFLAG_DYNAMIC			0x8000U
 #define SLAP_BFLAG_STANDALONE		0x10000U /* started up regardless of whether any databases use it */
+#define SLAP_BFLAG_TXNS				0x20000U /* supports LDAP transactions */
 
 /* overlay specific */
 #define	SLAPO_BFLAG_SINGLE		0x01000000U
@@ -2366,6 +2383,7 @@ struct BackendInfo {
 #define SLAP_DYNAMIC(be)	((SLAP_BFLAGS(be) & SLAP_BFLAG_DYNAMIC) || (SLAP_DBFLAGS(be) & SLAP_DBFLAG_DYNAMIC))
 #define SLAP_NOLASTMODCMD(be)	(SLAP_BFLAGS(be) & SLAP_BFLAG_NOLASTMODCMD)
 #define SLAP_LASTMODCMD(be)	(!SLAP_NOLASTMODCMD(be))
+#define SLAP_TXNS(be)		(SLAP_BFLAGS(be) & SLAP_BFLAG_TXNS)
 
 /* overlay specific */
 #define SLAPO_SINGLE(be)	(SLAP_BFLAGS(be) & SLAPO_BFLAG_SINGLE)
@@ -2677,6 +2695,8 @@ struct Operation {
 #define orr_nnewrdn oq_modrdn.rs_nnewrdn
 #define orr_newSup oq_modrdn.rs_newSup
 #define orr_nnewSup oq_modrdn.rs_nnewSup
+#define orr_newDN oq_modrdn.rs_newDN
+#define orr_nnewDN oq_modrdn.rs_nnewDN
 
 #define orc_ava oq_compare.rs_ava
 
@@ -2856,25 +2876,9 @@ typedef void (SEND_LDAP_INTERMEDIATE)(
 
 typedef struct Listener Listener;
 
-#ifdef LDAP_PF_LOCAL
-#define SLAP_ADDRLEN	(MAXPATHLEN + sizeof("PATH="))
-#elif defined(LDAP_PF_INET6)
-#define SLAP_ADDRLEN	sizeof("IP=[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff]:65535")
-#else
-#define SLAP_ADDRLEN	sizeof("IP=255.255.255.255:65336")
-#endif
-
 /*
  * represents a connection from an ldap client
  */
-/* structure state (protected by connections_mutex) */
-enum sc_struct_state {
-	SLAP_C_UNINITIALIZED = 0,	/* MUST BE ZERO (0) */
-	SLAP_C_UNUSED,
-	SLAP_C_USED,
-	SLAP_C_PENDING
-};
-
 /* connection state (protected by c_mutex ) */
 enum sc_conn_state {
 	SLAP_C_INVALID = 0,		/* MUST BE ZERO (0) */
@@ -2885,7 +2889,6 @@ enum sc_conn_state {
 	SLAP_C_CLIENT			/* outbound client conn */
 };
 struct Connection {
-	enum sc_struct_state	c_struct_state; /* structure management state */
 	enum sc_conn_state	c_conn_state;	/* connection state */
 	int			c_conn_idx;		/* slot in connections array */
 	ber_socket_t	c_sd;
@@ -2973,6 +2976,7 @@ struct Connection {
 	long	c_n_ops_executing;	/* num of ops currently executing */
 	long	c_n_ops_pending;	/* num of ops pending execution */
 	long	c_n_ops_completed;	/* num of ops completed */
+	long	c_n_ops_async;		/* mum of ops currently executing asynchronously */
 
 	long	c_n_get;		/* num of get calls */
 	long	c_n_read;		/* num of read calls */
@@ -3019,6 +3023,7 @@ struct Listener {
 #ifdef LDAP_CONNECTIONLESS
 	int	sl_is_udp;		/* UDP listener is also data port */
 #endif
+	int	sl_is_proxied;
 	int	sl_mute;	/* Listener is temporarily disabled due to emfile */
 	int	sl_busy;	/* Listener is busy (accept thread activated) */
 	ber_socket_t sl_sd;

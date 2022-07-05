@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2020 The OpenLDAP Foundation.
+ * Copyright 2002-2022 The OpenLDAP Foundation.
  * Portions Copyright 1997,2002-2003 IBM Corporation.
  * All rights reserved.
  *
@@ -233,6 +233,7 @@ slapi_int_connection_init_pb( Slapi_PBlock *pb, ber_tag_t tag )
 	conn->c_n_ops_executing = 0;
 	conn->c_n_ops_pending = 0;
 	conn->c_n_ops_completed = 0;
+	conn->c_n_ops_async = 0;
 
 	conn->c_n_get = 0;
 	conn->c_n_read = 0;
@@ -250,8 +251,7 @@ slapi_int_connection_init_pb( Slapi_PBlock *pb, ber_tag_t tag )
 	 */
 	connection_assign_nextid( conn );
 
-	conn->c_conn_state  = 0x01;	/* SLAP_C_ACTIVE */
-	conn->c_struct_state = 0x02;	/* SLAP_C_USED */
+	conn->c_conn_state  = SLAP_C_ACTIVE;
 
 	conn->c_ssf = conn->c_transport_ssf = local_ssf;
 	conn->c_tls_ssf = 0;
@@ -342,6 +342,10 @@ slapi_int_connection_done_pb( Slapi_PBlock *pb )
 			op->o_tmpfree( op->orr_nnewSup->bv_val, op->o_tmpmemctx );
 			op->o_tmpfree( op->orr_nnewSup, op->o_tmpmemctx );
 		}
+		if ( !BER_BVISNULL( &op->orr_newDN ))
+			op->o_tmpfree( op->orr_newDN.bv_val, op->o_tmpmemctx );
+		if ( !BER_BVISNULL( &op->orr_nnewDN ))
+			op->o_tmpfree( op->orr_nnewDN.bv_val, op->o_tmpmemctx );
 		slap_mods_free( op->orr_modlist, 1 );
 		break;
 	case LDAP_REQ_ADD:

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2003-2020 The OpenLDAP Foundation.
+ * Copyright 2003-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
 
 #define SLAPD_TOOLS
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 
 static slap_overinst *overlays;
 

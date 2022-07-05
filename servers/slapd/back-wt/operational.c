@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2020 The OpenLDAP Foundation.
+ * Copyright 2002-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
 #include <ac/string.h>
 
 #include "back-wt.h"
-#include "config.h"
+#include "slap-config.h"
 
 int
 wt_hasSubordinates(
@@ -42,12 +42,11 @@ wt_hasSubordinates(
 	wc = wt_ctx_get(op, wi);
 	if( !wc ){
 		Debug( LDAP_DEBUG_ANY,
-			   LDAP_XSTRING(wt_compare)
-			   ": wt_ctx_get failed\n" );
+			   "wt_hasSubordinates: wt_ctx_get failed\n" );
 		return LDAP_OTHER;
 	}
 
-	rc = wt_dn2id_has_children(op, wc->session, e->e_id);
+	rc = wt_dn2id_has_children(op, wc, e->e_id);
 	switch(rc){
 	case 0:
 		*hasSubordinates = LDAP_COMPARE_TRUE;
@@ -58,8 +57,7 @@ wt_hasSubordinates(
 		break;
 	default:
 		Debug(LDAP_DEBUG_ANY,
-			  "<=- " LDAP_XSTRING(wt_hasSubordinates)
-			  ": has_children failed: %s (%d)\n",
+			  "<=- wt_hasSubordinates: has_children failed: %s (%d)\n",
 			  wiredtiger_strerror(rc), rc );
 		rc = LDAP_OTHER;
 	}

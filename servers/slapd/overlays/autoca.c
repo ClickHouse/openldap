@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2009-2020 The OpenLDAP Foundation.
+ * Copyright 2009-2022 The OpenLDAP Foundation.
  * Copyright 2009-2018 by Howard Chu.
  * All rights reserved.
  *
@@ -30,7 +30,7 @@
 
 #include "lutil.h"
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -46,6 +46,10 @@
 #include <openssl/rsa.h>
 #define X509_get_notBefore(x)	X509_getm_notBefore(x)
 #define X509_get_notAfter(x)	X509_getm_notAfter(x)
+#endif
+
+#if OPENSSL_VERSION_MAJOR >= 3
+#define BN_pseudo_rand(bn, bits, top, bottom)	BN_rand(bn, bits, top, bottom)
 #endif
 
 /* This overlay implements a certificate authority that can generate
@@ -771,7 +775,7 @@ static ConfigTable autoca_cfg[] = {
 	  "EQUALITY integerMatch "
 	  "SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
 	{ "localdn", "dn", 2, 2, 0,
-	  ARG_DN|ARG_MAGIC|ACA_LOCALDN, autoca_cf,
+	  ARG_DN|ARG_QUOTE|ARG_MAGIC|ACA_LOCALDN, autoca_cf,
 	  "( OLcfgOvAt:22.9 NAME 'olcAutoCAlocalDN' "
 	  "DESC 'DN of local server cert' "
 	  "EQUALITY distinguishedNameMatch "
@@ -973,7 +977,7 @@ autoca_db_open(
 	OperationBuffer opbuf;
 	Operation *op;
 	void *thrctx;
-	Entry *e;
+	Entry *e = NULL;
 	Attribute *a;
 	int rc;
 

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2007-2020 The OpenLDAP Foundation.
+ * Copyright 2007-2022 The OpenLDAP Foundation.
  * Portions Copyright 2007 Michał Szulczyński.
  * Portions Copyright 2009 Howard Chu.
  * All rights reserved.
@@ -31,7 +31,7 @@
 #include <ac/string.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 
 #ifndef SLAPD_MEMBEROF_ATTR
@@ -849,7 +849,7 @@ done:
 
 /*
 ** When adding a group, we first strip any existing members,
-** and add all which match the filters ourselfs.
+** and add all which match the filters ourselves.
 */
 static int
 autogroup_add_entry( Operation *op, SlapReply *rs)
@@ -1059,7 +1059,6 @@ autogroup_response( Operation *op, SlapReply *rs )
 	autogroup_def_t		*agd = agi->agi_def;
 	autogroup_entry_t	*age;
 	autogroup_filter_t	*agf;
-	BerValue		new_dn, new_ndn, pdn;
 	Entry			*e, *group;
 	Attribute		*a, *ea, *attrs;
 	int			is_olddn, is_newdn, is_value_refresh, dn_equal;
@@ -1098,30 +1097,15 @@ autogroup_response( Operation *op, SlapReply *rs )
 		if ( rs->sr_type == REP_RESULT && rs->sr_err == LDAP_SUCCESS && !oex ) {
 
 			Debug( LDAP_DEBUG_TRACE, "==> autogroup_response MODRDN from <%s>\n", op->o_req_dn.bv_val );
+			Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN to <%s>\n", op->orr_newDN );
 
 			ldap_pvt_thread_mutex_lock( &agi->agi_mutex );			
 
-			if ( op->oq_modrdn.rs_newSup ) {
-				pdn = *op->oq_modrdn.rs_newSup;
-			} else {
-				dnParent( &op->o_req_dn, &pdn );
-			}
-			build_new_dn( &new_dn, &pdn, &op->orr_newrdn, op->o_tmpmemctx );
+			dnMatch( &dn_equal, 0, NULL, NULL, &op->o_req_ndn, &op->orr_nnewDN );
 
-			if ( op->oq_modrdn.rs_nnewSup ) {
-				pdn = *op->oq_modrdn.rs_nnewSup;
-			} else {
-				dnParent( &op->o_req_ndn, &pdn );
-			}
-			build_new_dn( &new_ndn, &pdn, &op->orr_nnewrdn, op->o_tmpmemctx );
-
-			Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN to <%s>\n", new_dn.bv_val );
-
-			dnMatch( &dn_equal, 0, NULL, NULL, &op->o_req_ndn, &new_ndn );
-
-			if ( overlay_entry_get_ov( op, &new_ndn, NULL, NULL, 0, &e, on ) !=
+			if ( overlay_entry_get_ov( op, &op->orr_nnewDN, NULL, NULL, 0, &e, on ) !=
 				LDAP_SUCCESS || e == NULL ) {
-				Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN cannot get entry for <%s>\n", new_dn.bv_val );
+				Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN cannot get entry for <%s>\n", op->orr_newDN.bv_val );
 				ldap_pvt_thread_mutex_unlock( &agi->agi_mutex );
 				return SLAP_CB_CONTINUE;
 			}
@@ -1130,7 +1114,7 @@ autogroup_response( Operation *op, SlapReply *rs )
 
 
 			if ( a == NULL ) {
-				Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN entry <%s> has no objectClass\n", new_dn.bv_val );
+				Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN entry <%s> has no objectClass\n", op->orr_newDN.bv_val );
 				overlay_entry_release_ov( op, e, 0, on );
 				ldap_pvt_thread_mutex_unlock( &agi->agi_mutex );		
 				return SLAP_CB_CONTINUE;
@@ -1151,12 +1135,10 @@ autogroup_response( Operation *op, SlapReply *rs )
 
 						dnMatch( &match, 0, NULL, NULL, &age->age_ndn, &op->o_req_ndn );
 						if ( match == 0 ) {
-							Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN updating group's DN to <%s>\n", new_dn.bv_val );
-							ber_dupbv( &age->age_dn, &new_dn );
-							ber_dupbv( &age->age_ndn, &new_ndn );
+							Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN updating group's DN to <%s>\n", op->orr_newDN.bv_val );
+							ber_dupbv( &age->age_dn, &op->orr_newDN );
+							ber_dupbv( &age->age_ndn, &op->orr_nnewDN );
 
-							op->o_tmpfree( new_dn.bv_val, op->o_tmpmemctx  );
-							op->o_tmpfree( new_ndn.bv_val, op->o_tmpmemctx );
 							overlay_entry_release_ov( op, e, 0, on );
 							ldap_pvt_thread_mutex_unlock( &agi->agi_mutex );		
 							return SLAP_CB_CONTINUE;
@@ -1203,9 +1185,6 @@ autogroup_response( Operation *op, SlapReply *rs )
 						LDAP_SUCCESS || group == NULL ) {
 						Debug( LDAP_DEBUG_TRACE, "autogroup_response MODRDN cannot get group entry <%s>\n", age->age_dn.bv_val );
 
-						op->o_tmpfree( new_dn.bv_val, op->o_tmpmemctx );
-						op->o_tmpfree( new_ndn.bv_val, op->o_tmpmemctx );
-
 						attrs_free( attrs );
 						ldap_pvt_thread_mutex_unlock( &age->age_mutex );
 						ldap_pvt_thread_mutex_unlock( &agi->agi_mutex );
@@ -1230,7 +1209,7 @@ autogroup_response( Operation *op, SlapReply *rs )
 				}
 
 				for ( agf = age->age_filter ; agf ; agf = agf->agf_next ) {
-					if ( dnIsSuffix( &new_ndn, &agf->agf_ndn ) ) {
+					if ( dnIsSuffix( &op->orr_nnewDN, &agf->agf_ndn ) ) {
 						/* TODO: should retest filter as it could imply conditions on the dn */
 						is_newdn = 1;
 						break;
@@ -1252,7 +1231,7 @@ autogroup_response( Operation *op, SlapReply *rs )
 				}
 				if ( is_olddn == 1 && is_newdn == 0 ) {
 					if ( ea )
-						autogroup_delete_member_values_from_group( op, &new_dn, age, ea );
+						autogroup_delete_member_values_from_group( op, &op->orr_newDN, age, ea );
 					else
 						autogroup_delete_member_from_group( op, &op->o_req_dn, &op->o_req_ndn, age );
 				} else
@@ -1270,9 +1249,9 @@ autogroup_response( Operation *op, SlapReply *rs )
 					for ( agf = age->age_filter; agf; agf = agf->agf_next ) {
 						if ( test_filter( op, &etmp, agf->agf_filter ) == LDAP_COMPARE_TRUE ) {
 							if ( ea ) {
-								autogroup_add_member_values_to_group( op, &new_dn, age, ea );
+								autogroup_add_member_values_to_group( op, &op->orr_newDN, age, ea );
 							} else
-								autogroup_add_member_to_group( op, &new_dn, &new_ndn, age );
+								autogroup_add_member_to_group( op, &op->orr_newDN, &op->orr_nnewDN, age );
 							break;
 						}
 					}
@@ -1290,15 +1269,12 @@ autogroup_response( Operation *op, SlapReply *rs )
 					}
 					else {
 						autogroup_delete_member_from_group( op, &op->o_req_dn, &op->o_req_ndn, age );
-						autogroup_add_member_to_group( op, &new_dn, &new_ndn, age );
+						autogroup_add_member_to_group( op, &op->orr_newDN, &op->orr_nnewDN, age );
 					}
 				}
 
 				ldap_pvt_thread_mutex_unlock( &age->age_mutex );
 			}
-
-			op->o_tmpfree( new_dn.bv_val, op->o_tmpmemctx );
-			op->o_tmpfree( new_ndn.bv_val, op->o_tmpmemctx );
 
 			attrs_free( attrs );
 
@@ -1385,7 +1361,7 @@ autogroup_response( Operation *op, SlapReply *rs )
 
 			/* When modifying any of the attributes of an entry, we must
 			   check if the entry is in any of our groups, and if
-			   the modified entry maches any of the filters of that group.
+			   the modified entry matches any of the filters of that group.
 
 			   If the entry exists in a group, but the modified attributes do
 				not match any of the group's filters, we delete the entry from that group.
@@ -1970,7 +1946,7 @@ ag_cfgen( ConfigArgs *c )
 			}
 		}
 
-		if ( c->valx > 0 ) {
+		if ( c->valx >= 0 ) {
 			int	i;
 
 			for ( i = 0, agdp = &agi->agi_def ;
@@ -2072,7 +2048,7 @@ autogroup_db_open(
 		return 0;
 	}
 
-	connection_fake_init( &conn, &opbuf, thrctx );
+	connection_fake_init2( &conn, &opbuf, thrctx, 0 );
 	op = &opbuf.ob_op;
 
 	op->ors_attrsonly = 0;

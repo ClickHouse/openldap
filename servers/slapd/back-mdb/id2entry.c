@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2020 The OpenLDAP Foundation.
+ * Copyright 2000-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -86,7 +86,7 @@ mdb_id2v_dupsort(
 	bv1.bv_val = usrkey[1].mv_data;
 	bv1.bv_len = usrkey[1].mv_size;
 
-	if (ad) {
+	if (ad && ad->ad_type->sat_equality) {
 		MatchingRule *mr = ad->ad_type->sat_equality;
 		rc = mr->smr_match(&match, SLAP_MR_EQUALITY
 		| SLAP_MR_VALUE_OF_ASSERTION_SYNTAX
@@ -465,10 +465,13 @@ int mdb_id2entry_delete(
 	MDB_dbi dbi = mdb->mi_id2entry;
 	MDB_val key;
 	MDB_cursor *mvc;
+	char kbuf[sizeof(ID) + sizeof(unsigned short)];
 	int rc;
 
-	key.mv_data = &e->e_id;
-	key.mv_size = sizeof(ID);
+	memcpy( kbuf, &e->e_id, sizeof(ID) );
+	memset( kbuf+sizeof(ID), 0, sizeof(unsigned short) );
+	key.mv_data = kbuf;
+	key.mv_size = sizeof(kbuf);
 
 	/* delete from database */
 	rc = mdb_del( tid, dbi, &key, NULL );
@@ -490,7 +493,8 @@ int mdb_id2entry_delete(
 			return rc;
 		rc = mdb_cursor_get( mvc, &key, NULL, MDB_GET_CURRENT );
 		if (rc) {
-			if (rc == MDB_NOTFOUND)
+			/* no record or DB is empty */
+			if (rc == MDB_NOTFOUND || rc == EINVAL)
 				rc = MDB_SUCCESS;
 			break;
 		}

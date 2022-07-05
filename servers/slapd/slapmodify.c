@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * Portions Copyright 1998-2003 Kurt D. Zeilenga.
  * Portions Copyright 2003 IBM Corporation.
  * All rights reserved.
@@ -309,6 +309,16 @@ slapmodify( int argc, char **argv )
 				int normalize = 0;
 
 				local_rc = slap_str2ad( mod->mod_type, &mods.sm_desc, &text );
+				/*
+				 * Usually this would be a bad idea (way too dangerous, risks
+				 * corrupting the DB), but ITS#7786 documents this as a last
+				 * resort to fix cn=config and missing attributes are one of
+				 * the possible issues we might encounter.
+				 */
+				if ( local_rc == LDAP_UNDEFINED_TYPE &&
+						(slapMode & SLAP_TOOL_NO_SCHEMA_CHECK) ) {
+					local_rc = slap_str2undef_ad( mod->mod_type, &mods.sm_desc, &text, 0 );
+				}
 				if ( local_rc != LDAP_SUCCESS ) {
 					fprintf( stderr, "%s: slap_str2ad(\"%s\") failed for entry \"%s\" (%d: %s, lineno=%lu)\n",
 						progname, mod->mod_type, lr.lr_dn.bv_val, local_rc, text, lineno );

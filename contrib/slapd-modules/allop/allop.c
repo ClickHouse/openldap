@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2020 The OpenLDAP Foundation.
+ * Copyright 2005-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@ allop-URI	<ldapURI>
 #include <ac/string.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 
 #define	SLAP_OVER_VERSION_REQUIRE(major,minor,patch) \
 	( \

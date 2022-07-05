@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2020 The OpenLDAP Foundation.
+ * Copyright 1999-2022 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * Portions Copyright 1999-2003 Howard Chu.
  * All rights reserved.
@@ -160,7 +160,7 @@ meta_back_print( metaconn_t *mc, char *avlstr )
 }
 
 static void
-meta_back_ravl_print( Avlnode *root, int depth )
+meta_back_ravl_print( TAvlnode *root, int depth )
 {
 	int     	i;
 
@@ -418,6 +418,13 @@ retry_lock:;
 
 	slap_client_keepalive(msc->msc_ld, &mt->mt_tls.sb_keepalive);
 
+	if ( mt->mt_tls.sb_tcp_user_timeout > 0 ) {
+		ldap_set_option( msc->msc_ld, LDAP_OPT_TCP_USER_TIMEOUT,
+				&mt->mt_tls.sb_tcp_user_timeout );
+	}
+
+
+
 #ifdef HAVE_TLS
 	{
 		slap_bindconf *sb = NULL;
@@ -508,7 +515,7 @@ retry:;
 					 * using it instead of the 
 					 * configured URI? */
 					if ( rs->sr_err == LDAP_SUCCESS ) {
-						ldap_install_tls( msc->msc_ld );
+						rs->sr_err = ldap_install_tls( msc->msc_ld );
 
 					} else if ( rs->sr_err == LDAP_REFERRAL ) {
 						/* FIXME: LDAP_OPERATIONS_ERROR? */
@@ -830,7 +837,7 @@ meta_back_retry(
 
 				} else {
 					/* FIXME: check if in tree, for consistency? */
-					(void)avl_delete( &mi->mi_conninfo.lai_tree,
+					(void)ldap_tavl_delete( &mi->mi_conninfo.lai_tree,
 						( caddr_t )mc, meta_back_conndnmc_cmp );
 				}
 				LDAP_BACK_CONN_CACHED_CLEAR( mc );
@@ -1155,7 +1162,7 @@ retry_lock:;
 			
 
 		} else {
-			mc = (metaconn_t *)avl_find( mi->mi_conninfo.lai_tree, 
+			mc = (metaconn_t *)ldap_tavl_find( mi->mi_conninfo.lai_tree,
 				(caddr_t)&mc_curr, meta_back_conndn_cmp );
 		}
 
@@ -1200,7 +1207,7 @@ retry_lock:;
 						}
 
 					} else {
-						(void)avl_delete( &mi->mi_conninfo.lai_tree,
+						(void)ldap_tavl_delete( &mi->mi_conninfo.lai_tree,
 							(caddr_t)mc, meta_back_conndnmc_cmp );
 					}
 
@@ -1420,7 +1427,7 @@ retry_lock:;
 			if ( !( sendok & LDAP_BACK_BINDING ) ) {
 retry_lock2:;
 				ldap_pvt_thread_mutex_lock( &mi->mi_conninfo.lai_mutex );
-				mc = (metaconn_t *)avl_find( mi->mi_conninfo.lai_tree, 
+				mc = (metaconn_t *)ldap_tavl_find( mi->mi_conninfo.lai_tree,
 					(caddr_t)&mc_curr, meta_back_conndn_cmp );
 				if ( mc != NULL ) {
 					/* catch taint errors */
@@ -1669,7 +1676,7 @@ done:;
 			rs->sr_err = 0;
 
 		} else if ( !( sendok & LDAP_BACK_BINDING ) ) {
-			err = avl_insert( &mi->mi_conninfo.lai_tree, ( caddr_t )mc,
+			err = ldap_tavl_insert( &mi->mi_conninfo.lai_tree, ( caddr_t )mc,
 			       	meta_back_conndn_cmp, meta_back_conndn_dup );
 			LDAP_BACK_CONN_CACHED_SET( mc );
 		}
@@ -1786,7 +1793,7 @@ meta_back_release_conn_lock(
 		} else if ( LDAP_BACK_CONN_CACHED( mc ) ) {
 			metaconn_t	*tmpmc;
 
-			tmpmc = avl_delete( &mi->mi_conninfo.lai_tree,
+			tmpmc = ldap_tavl_delete( &mi->mi_conninfo.lai_tree,
 				( caddr_t )mc, meta_back_conndnmc_cmp );
 
 			/* Overparanoid, but useful... */
@@ -1860,7 +1867,7 @@ meta_back_quarantine(
 			break;
 
 		default:
-			break;
+			goto done;
 		}
 
 		mt->mt_isquarantined = LDAP_BACK_FQ_YES;

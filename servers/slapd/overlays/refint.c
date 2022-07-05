@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2004-2020 The OpenLDAP Foundation.
+ * Copyright 2004-2022 The OpenLDAP Foundation.
  * Portions Copyright 2004 Symas Corporation.
  * All rights reserved.
  *
@@ -38,7 +38,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "ldap_rq.h"
 
 static slap_overinst refint;
@@ -116,13 +116,13 @@ static ConfigTable refintcfg[] = {
 	  "EQUALITY caseIgnoreMatch "
 	  "SYNTAX OMsDirectoryString )", NULL, NULL },
 	{ "refint_nothing", "string", 2, 2, 0,
-	  ARG_DN|ARG_MAGIC|REFINT_NOTHING, refint_cf_gen,
+	  ARG_DN|ARG_QUOTE|ARG_MAGIC|REFINT_NOTHING, refint_cf_gen,
 	  "( OLcfgOvAt:11.2 NAME 'olcRefintNothing' "
 	  "DESC 'Replacement DN to supply when needed' "
 	  "EQUALITY distinguishedNameMatch "
 	  "SYNTAX OMsDN SINGLE-VALUE )", NULL, NULL },
 	{ "refint_modifiersName", "DN", 2, 2, 0,
-	  ARG_DN|ARG_MAGIC|REFINT_MODIFIERSNAME, refint_cf_gen,
+	  ARG_DN|ARG_QUOTE|ARG_MAGIC|REFINT_MODIFIERSNAME, refint_cf_gen,
 	  "( OLcfgOvAt:11.3 NAME 'olcRefintModifiersName' "
 	  "DESC 'The DN to use as modifiersName' "
 	  "EQUALITY distinguishedNameMatch "
@@ -242,6 +242,14 @@ refint_cf_gen(ConfigArgs *c)
 		switch ( c->type ) {
 		case REFINT_ATTRS:
 			rc = 0;
+			if ( c->op != SLAP_CONFIG_ADD && c->argc > 2 ) {
+				/* We wouldn't know how to delete these values later */
+				Debug( LDAP_DEBUG_CONFIG|LDAP_DEBUG_NONE,
+					"Supplying multiple names in a single %s value is "
+					"unsupported and will be disallowed in a future version\n",
+					c->argv[0] );
+			}
+
 			for ( i=1; i < c->argc; ++i ) {
 				ad = NULL;
 				if ( slap_str2ad ( c->argv[i], &ad, &text )
@@ -249,8 +257,11 @@ refint_cf_gen(ConfigArgs *c)
 					ip = ch_malloc (
 						sizeof ( refint_attrs ) );
 					ip->attr = ad;
-					ip->next = dd->attrs;
-					dd->attrs = ip;
+
+					for ( pipp = &dd->attrs; *pipp; pipp = &(*pipp)->next )
+						/* Get to the end */ ;
+					ip->next = *pipp;
+					*pipp = ip;
 				} else {
 					snprintf( c->cr_msg, sizeof( c->cr_msg ),
 						"%s <%s>: %s", c->argv[0], c->argv[i], text );
@@ -937,7 +948,6 @@ refint_response(
 	refint_pre *rp;
 	slap_overinst *on;
 	refint_data *id;
-	BerValue pdn;
 	refint_q *rq;
 	refint_attrs *ip;
 	int ac;
@@ -959,18 +969,8 @@ refint_response(
 	rq->do_sub = rp->do_sub;
 
 	if ( op->o_tag == LDAP_REQ_MODRDN ) {
-		if ( op->oq_modrdn.rs_newSup ) {
-			pdn = *op->oq_modrdn.rs_newSup;
-		} else {
-			dnParent( &op->o_req_dn, &pdn );
-		}
-		build_new_dn( &rq->newdn, &pdn, &op->orr_newrdn, NULL );
-		if ( op->oq_modrdn.rs_nnewSup ) {
-			pdn = *op->oq_modrdn.rs_nnewSup;
-		} else {
-			dnParent( &op->o_req_ndn, &pdn );
-		}
-		build_new_dn( &rq->newndn, &pdn, &op->orr_nnewrdn, NULL );
+		ber_dupbv( &rq->newdn, &op->orr_newDN );
+		ber_dupbv( &rq->newndn, &op->orr_nnewDN );
 	}
 
 	ldap_pvt_thread_mutex_lock( &id->qmutex );

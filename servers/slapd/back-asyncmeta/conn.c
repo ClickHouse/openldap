@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2020 The OpenLDAP Foundation.
+ * Copyright 2016-2022 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -214,6 +214,11 @@ asyncmeta_init_one_conn(
 
 	slap_client_keepalive(msc->msc_ld, &mt->mt_tls.sb_keepalive);
 
+	if ( mt->mt_tls.sb_tcp_user_timeout > 0 ) {
+		ldap_set_option( msc->msc_ld, LDAP_OPT_TCP_USER_TIMEOUT,
+				 &mt->mt_tls.sb_tcp_user_timeout );
+	}
+
 #ifdef HAVE_TLS
 	{
 		slap_bindconf *sb = NULL;
@@ -303,7 +308,7 @@ retry:;
 					 * using it instead of the
 					 * configured URI? */
 					if ( rs->sr_err == LDAP_SUCCESS ) {
-						ldap_install_tls( msc->msc_ld );
+						rs->sr_err = ldap_install_tls( msc->msc_ld );
 
 					} else if ( rs->sr_err == LDAP_REFERRAL ) {
 						/* FIXME: LDAP_OPERATIONS_ERROR? */
@@ -352,6 +357,8 @@ retry:;
 				(void *)msc->msc_ld );
 #endif /* DEBUG_205 */
 
+			/* need to trash a failed Start TLS */
+			asyncmeta_clear_one_msc( op, mc, candidate, 1, __FUNCTION__ );
 			goto error_return;
 		}
 	}
@@ -971,7 +978,7 @@ asyncmeta_quarantine(
 			break;
 
 		default:
-			break;
+			goto done;
 		}
 
 		mt->mt_isquarantined = LDAP_BACK_FQ_YES;
@@ -1174,4 +1181,42 @@ void asyncmeta_log_conns(a_metainfo_t *mi)
 		}
 
 	}
+}
+
+int
+asyncmeta_db_has_pending_ops(a_metainfo_t *mi)
+{
+	int i;
+	if (mi->mi_ntargets == 0) {
+		return 0;
+	}
+
+	for (i = 0; i < mi->mi_num_conns; i++) {
+		if (mi->mi_conns[i].pending_ops > 0) {
+			return mi->mi_conns[i].pending_ops;
+		}
+	}
+
+	return 0;
+}
+
+
+int
+asyncmeta_db_has_mscs(a_metainfo_t *mi)
+{
+	int i, j;
+	if (mi->mi_ntargets == 0) {
+		return 0;
+	}
+
+	for (i = 0; i < mi->mi_num_conns; i++) {
+		for (j = 0; j < mi->mi_ntargets; j++) {
+			if (mi->mi_conns[i].mc_conns[j].msc_ld != NULL ||
+			    mi->mi_conns[i].mc_conns[j].msc_ldr != NULL ) {
+				return 1;
+			}
+		}
+	}
+
+	return 0;
 }

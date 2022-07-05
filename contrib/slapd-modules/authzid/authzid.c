@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2010-2020 The OpenLDAP Foundation.
+ * Copyright 2010-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
 #include "portable.h"
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 #include "ac/string.h"
 
@@ -71,7 +71,7 @@ authzid_conn_find( Connection *c )
 	authzid_conn_t *ac = NULL, tmp = { 0 };
 
 	tmp.conn = c;
-	ac = (authzid_conn_t *)avl_find( authzid_tree, (caddr_t)&tmp, authzid_conn_cmp );
+	ac = (authzid_conn_t *)ldap_avl_find( authzid_tree, (caddr_t)&tmp, authzid_conn_cmp );
 	if ( ac == NULL || ( ac != NULL && ac->refcnt != 0 ) ) {
 		ac = NULL;
 	}
@@ -121,7 +121,7 @@ authzid_conn_insert( Connection *c, char flag )
 	ac->conn = c;
 	ac->refcnt = 0;
 	ac->authzid_flag = flag;
-	rc = avl_insert( &authzid_tree, (caddr_t)ac,
+	rc = ldap_avl_insert( &authzid_tree, (caddr_t)ac,
 		authzid_conn_cmp, authzid_conn_dup );
 	ldap_pvt_thread_mutex_unlock( &authzid_mutex );
 
@@ -139,7 +139,7 @@ authzid_conn_remove( Connection *c )
 		ldap_pvt_thread_mutex_unlock( &authzid_mutex );
 		return -1;
 	}
-	tmp = avl_delete( &authzid_tree, (caddr_t)ac, authzid_conn_cmp );
+	tmp = ldap_avl_delete( &authzid_tree, (caddr_t)ac, authzid_conn_cmp );
 	ldap_pvt_thread_mutex_unlock( &authzid_mutex );
 
 	assert( tmp == ac );

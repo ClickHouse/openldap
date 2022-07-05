@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2020 The OpenLDAP Foundation.
+ * Copyright 2002-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,7 @@
 #define IDL_MIN(x,y)	( (x) < (y) ? (x) : (y) )
 #define IDL_CMP(x,y)	( (x) < (y) ? -1 : (x) > (y) )
 
-#if IDL_DEBUG > 0
-static void idl_check( ID *ids )
+void wt_idl_check( ID *ids )
 {
 	if( WT_IDL_IS_RANGE( ids ) ) {
 		assert( WT_IDL_RANGE_FIRST(ids) <= WT_IDL_RANGE_LAST(ids) );
@@ -44,8 +43,7 @@ static void idl_check( ID *ids )
 	}
 }
 
-#if IDL_DEBUG > 1
-static void idl_dump( ID *ids )
+void wt_idl_dump( ID *ids )
 {
 	if( WT_IDL_IS_RANGE( ids ) ) {
 		Debug( LDAP_DEBUG_ANY,
@@ -67,10 +65,8 @@ static void idl_dump( ID *ids )
 		Debug( LDAP_DEBUG_ANY, "\n" );
 	}
 
-	idl_check( ids );
+	wt_idl_check( ids );
 }
-#endif /* IDL_DEBUG > 1 */
-#endif /* IDL_DEBUG > 0 */
 
 unsigned wt_idl_search( ID *ids, ID id )
 {
@@ -79,7 +75,7 @@ unsigned wt_idl_search( ID *ids, ID id )
 	/*
 	 * binary search of id in ids
 	 * if found, returns position of id
-	 * if not found, returns first postion greater than id
+	 * if not found, returns first position greater than id
 	 */
 	unsigned base = 0;
 	unsigned cursor = 1;
@@ -138,7 +134,7 @@ int wt_idl_insert( ID *ids, ID id )
 	Debug( LDAP_DEBUG_ANY, "insert: %04lx at %d\n", (long) id, x );
 	idl_dump( ids );
 #elif IDL_DEBUG > 0
-	idl_check( ids );
+	wt_idl_check( ids );
 #endif
 
 	if (WT_IDL_IS_RANGE( ids )) {
@@ -183,9 +179,9 @@ int wt_idl_insert( ID *ids, ID id )
 	}
 
 #if IDL_DEBUG > 1
-	idl_dump( ids );
+	wt_idl_dump( ids );
 #elif IDL_DEBUG > 0
-	idl_check( ids );
+	wt_idl_check( ids );
 #endif
 
 	return 0;
@@ -199,7 +195,7 @@ static int wt_idl_delete( ID *ids, ID id )
 	Debug( LDAP_DEBUG_ANY, "delete: %04lx at %d\n", (long) id, x );
 	idl_dump( ids );
 #elif IDL_DEBUG > 0
-	idl_check( ids );
+	wt_idl_check( ids );
 #endif
 
 	if (WT_IDL_IS_RANGE( ids )) {
@@ -240,9 +236,9 @@ static int wt_idl_delete( ID *ids, ID id )
 	}
 
 #if IDL_DEBUG > 1
-	idl_dump( ids );
+	wt_idl_dump( ids );
 #elif IDL_DEBUG > 0
-	idl_check( ids );
+	wt_idl_check( ids );
 #endif
 
 	return 0;
@@ -755,7 +751,7 @@ wt_idl_sort( ID *ids, ID *tmp )
         np = num;
         for ( i = BUCKETS; i > 0; --i ) *np++ = 0;
 
-		/* count occurences of every byte value */
+		/* count occurrences of every byte value */
 		bp = source_start;
         for ( i = size; i > 0; --i, bp += sizeof(ID) )
 				num[*bp]++;

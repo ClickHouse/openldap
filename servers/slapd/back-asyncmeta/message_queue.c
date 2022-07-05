@@ -3,7 +3,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2020 The OpenLDAP Foundation.
+ * Copyright 2016-2022 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -51,20 +51,10 @@ typedef struct listhead {
 #define LH_MAX	16
 #endif
 
-static void *asyncmeta_memctx_get(void *threadctx)
-{
-	return slap_sl_mem_create(SLAP_SLAB_SIZE, SLAP_SLAB_STACK, threadctx, 1);
-}
-
 static void asyncmeta_memctx_put(void *threadctx, void *memctx)
 {
 	slap_sl_mem_setctx(threadctx, NULL);
 	slap_sl_mem_destroy((void *)1, memctx);
-}
-
-void asyncmeta_memctx_toggle(void *thrctx)
-{
-	asyncmeta_memctx_get(thrctx);
 }
 
 int asyncmeta_new_bm_context(Operation *op,
@@ -151,7 +141,7 @@ void asyncmeta_free_op(Operation *op)
 		Debug( LDAP_DEBUG_TRACE, "==> asyncmeta_free_op : other message type" );
 	}
 
-	connection_op_finish( op );
+	connection_op_finish( op, 1 );
 	slap_op_free( op, op->o_threadctx );
 }
 

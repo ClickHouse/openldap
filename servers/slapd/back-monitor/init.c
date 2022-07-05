@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2020 The OpenLDAP Foundation.
+ * Copyright 2001-2022 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -26,11 +26,11 @@
 
 #include <lutil.h>
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lber_pvt.h"
 #include "back-monitor.h"
 
-#include "config.h"
+#include "slap-config.h"
 
 #undef INTEGRATE_CORE_SCHEMA
 
@@ -131,7 +131,7 @@ static struct monitor_subsys_t known_monitor_subsys[] = {
 		SLAPD_MONITOR_LOG_NAME,
 		BER_BVNULL, BER_BVNULL, BER_BVNULL,
 		{ BER_BVC( "This subsystem contains information about logging." ),
-		  	BER_BVC( "Set the attribute \"managedInfo\" to the desired log levels." ),
+			BER_BVC( "Set the \"monitorLogLevel\" or \"monitorDebugLevel\" attributes to the desired levels." ),
 			BER_BVNULL },
 		MONITOR_F_NONE,
 		monitor_subsys_log_init,
@@ -462,6 +462,7 @@ monitor_back_register_entry(
 	unsigned long		flags )
 {
 	monitor_info_t 	*mi;
+	int rc = 0;
 
 	if ( be_monitor == NULL ) {
 		Debug( LDAP_DEBUG_ANY,
@@ -478,13 +479,10 @@ monitor_back_register_entry(
 	assert( e->e_private == NULL );
 	
 	if ( monitor_subsys_is_opened() ) {
-		Entry		*e_parent = NULL,
-				*e_new = NULL,
-				**ep = NULL;
+		Entry		*e_parent = NULL, *e_new = NULL;
 		struct berval	pdn = BER_BVNULL;
 		monitor_entry_t *mp = NULL,
 				*mp_parent = NULL;
-		int		rc = 0;
 
 		if ( monitor_cache_get( mi, &e->e_nname, &e_parent ) == 0 ) {
 			/* entry exists */
@@ -550,14 +548,7 @@ monitor_back_register_entry(
 		}
 		mp->mp_cb = cb;
 
-		ep = &mp_parent->mp_children;
-		for ( ; *ep; ) {
-			mp_parent = ( monitor_entry_t * )(*ep)->e_private;
-			ep = &mp_parent->mp_next;
-		}
-		*ep = e_new;
-
-		if ( monitor_cache_add( mi, e_new ) ) {
+		if ( monitor_cache_add( mi, e_new, e_parent ) ) {
 			Debug( LDAP_DEBUG_ANY,
 				"monitor_back_register_entry(\"%s\"): "
 				"unable to add entry\n",
@@ -615,7 +606,7 @@ done:;
 		**elpp = el;
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -656,9 +647,7 @@ monitor_back_register_entry_parent(
 	}
 
 	if ( monitor_subsys_is_opened() ) {
-		Entry		*e_parent = NULL,
-				*e_new = NULL,
-				**ep = NULL;
+		Entry		*e_parent = NULL, *e_new = NULL;
 		struct berval	e_name = BER_BVNULL,
 				e_nname = BER_BVNULL;
 		monitor_entry_t *mp = NULL,
@@ -750,14 +739,7 @@ monitor_back_register_entry_parent(
 		}
 		mp->mp_cb = cb;
 
-		ep = &mp_parent->mp_children;
-		for ( ; *ep; ) {
-			mp_parent = ( monitor_entry_t * )(*ep)->e_private;
-			ep = &mp_parent->mp_next;
-		}
-		*ep = e_new;
-
-		if ( monitor_cache_add( mi, e_new ) ) {
+		if ( monitor_cache_add( mi, e_new, e_parent ) ) {
 			Debug( LDAP_DEBUG_ANY,
 				"monitor_back_register_entry(\"%s\"): "
 				"unable to add entry\n",
@@ -1951,6 +1933,29 @@ monitor_back_initialize(
 			"NO-USER-MODIFICATION "
 			"USAGE dSAOperation )", SLAP_AT_FINAL|SLAP_AT_HIDE,
 			offsetof(monitor_info_t, mi_ad_monitorSuperiorDN) },
+		{ "( 1.3.6.1.4.1.4203.666.1.55.31 "
+			"NAME 'monitorConnectionOpsAsync' "
+			"DESC 'monitor number of asynchronous operations in execution within the connection' "
+			"SUP monitorCounter "
+			"NO-USER-MODIFICATION "
+			"USAGE dSAOperation )", SLAP_AT_FINAL|SLAP_AT_HIDE,
+			offsetof(monitor_info_t, mi_ad_monitorConnectionOpsAsync) },
+		{ "( 1.3.6.1.4.1.4203.666.1.55.32 "
+			"NAME 'monitorLogLevel' "
+			"DESC 'current slapd log level' "
+			"EQUALITY caseIgnoreMatch "
+			"SUBSTR caseIgnoreSubstringsMatch "
+			"SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 "
+			"USAGE dSAOperation )", SLAP_AT_FINAL|SLAP_AT_HIDE,
+			offsetof(monitor_info_t, mi_ad_monitorLogLevel) },
+		{ "( 1.3.6.1.4.1.4203.666.1.55.33 "
+			"NAME 'monitorDebugLevel' "
+			"DESC 'current slapd debug level' "
+			"EQUALITY caseIgnoreMatch "
+			"SUBSTR caseIgnoreSubstringsMatch "
+			"SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 "
+			"USAGE dSAOperation )", SLAP_AT_FINAL|SLAP_AT_HIDE,
+			offsetof(monitor_info_t, mi_ad_monitorDebugLevel) },
 		{ NULL, 0, -1 }
 	};
 
@@ -1963,6 +1968,7 @@ monitor_back_initialize(
 		{ "olmGenericAttributes",		"olmSubSystemAttributes:0" },
 		{ "olmDatabaseAttributes",		"olmSubSystemAttributes:1" },
 		{ "olmOverlayAttributes",		"olmSubSystemAttributes:2" },
+		{ "olmModuleAttributes",		"olmSubSystemAttributes:3" },
 
 		/* for example, back-mdb specific attrs
 		 * are in "olmDatabaseAttributes:12"
@@ -1975,6 +1981,7 @@ monitor_back_initialize(
 		{ "olmGenericObjectClasses",		"olmSubSystemObjectClasses:0" },
 		{ "olmDatabaseObjectClasses",		"olmSubSystemObjectClasses:1" },
 		{ "olmOverlayObjectClasses",		"olmSubSystemObjectClasses:2" },
+		{ "olmModuleObjectClasses",			"olmSubSystemObjectClasses:3" },
 
 		/* for example, back-mdb specific objectClasses
 		 * are in "olmDatabaseObjectClasses:12"
@@ -2153,7 +2160,7 @@ monitor_back_db_init(
 
 	/* NOTE: only one monitor database is allowed,
 	 * so we use static storage */
-	ldap_pvt_thread_mutex_init( &monitor_info.mi_cache_mutex );
+	ldap_pvt_thread_mutex_init( &monitor_info.mi_cache_lock );
 
 	be->be_private = &monitor_info;
 
@@ -2220,7 +2227,7 @@ monitor_back_db_open(
 {
 	monitor_info_t 		*mi = (monitor_info_t *)be->be_private;
 	struct monitor_subsys_t	**ms;
-	Entry 			*e, **ep, *root;
+	Entry 			*e, *root;
 	monitor_entry_t		*mp;
 	int			i;
 	struct berval		bv, rdn = BER_BVC(SLAPD_MONITOR_DN);
@@ -2309,9 +2316,8 @@ monitor_back_db_open(
 		return -1;
 	}
 	e->e_private = ( void * )mp;
-	ep = &mp->mp_children;
 
-	if ( monitor_cache_add( mi, e ) ) {
+	if ( monitor_cache_add( mi, e, NULL ) ) {
 		Debug( LDAP_DEBUG_ANY,
 			"unable to add entry \"%s\" to cache\n",
 			SLAPD_MONITOR_DN );
@@ -2366,15 +2372,12 @@ monitor_back_db_open(
 		mp->mp_info = monitor_subsys[ i ];
 		mp->mp_flags = monitor_subsys[ i ]->mss_flags;
 
-		if ( monitor_cache_add( mi, e ) ) {
+		if ( monitor_cache_add( mi, e, root ) ) {
 			Debug( LDAP_DEBUG_ANY,
 				"unable to add entry \"%s\" to cache\n",
 				monitor_subsys[ i ]->mss_dn.bv_val );
 			return -1;
 		}
-
-		*ep = e;
-		ep = &mp->mp_next;
 	}
 
 	assert( be != NULL );
@@ -2556,7 +2559,7 @@ monitor_back_db_destroy(
 		}
 	}
 	
-	ldap_pvt_thread_mutex_destroy( &monitor_info.mi_cache_mutex );
+	ldap_pvt_thread_mutex_destroy( &monitor_info.mi_cache_lock );
 
 	be->be_private = NULL;
 

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2020 The OpenLDAP Foundation.
+ * Copyright 2000-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -406,7 +406,7 @@ mdb_waitfixup( Operation *op, ww_ctx *ww, MDB_cursor *mci, MDB_cursor *mcd, IdSc
 		ww->data.mv_data = NULL;
 	} else if ( isc->scopes[0].mid > 1 ) {	/* candidate-based search */
 		int i;
-		for ( i=1; i<isc->scopes[0].mid; i++ ) {
+		for ( i=1; i<=isc->scopes[0].mid; i++ ) {
 			if ( !isc->scopes[i].mval.mv_data )
 				continue;
 			key.mv_data = &isc->scopes[i].mid;
@@ -432,6 +432,7 @@ mdb_search( Operation *op, SlapReply *rs )
 	time_t		stoptime;
 	int		manageDSAit;
 	int		tentries = 0;
+	int		admincheck = 0;
 	IdScopes	isc;
 	MDB_cursor	*mci, *mcd;
 	ww_ctx wwctx;
@@ -677,8 +678,13 @@ dn2entry_retry:
 		rs->sr_err = search_candidates( op, rs, base,
 			&isc, mci, candidates, stack );
 
-		if ( rs->sr_err == LDAP_ADMINLIMIT_EXCEEDED )
-			goto adminlimit;
+		if ( rs->sr_err == LDAP_ADMINLIMIT_EXCEEDED ) {
+adminlimit:
+			rs->sr_err = LDAP_ADMINLIMIT_EXCEEDED;
+			send_ldap_result( op, rs );
+			rs->sr_err = LDAP_SUCCESS;
+			goto done;
+		}
 
 		ncand = MDB_IDL_N( candidates );
 		if ( !base->e_id || ncand == NOID ) {
@@ -709,11 +715,7 @@ dn2entry_retry:
 		op->ors_limit->lms_s_unchecked != -1 &&
 		ncand > (unsigned) op->ors_limit->lms_s_unchecked )
 	{
-		rs->sr_err = LDAP_ADMINLIMIT_EXCEEDED;
-adminlimit:
-		send_ldap_result( op, rs );
-		rs->sr_err = LDAP_SUCCESS;
-		goto done;
+		admincheck = 1;
 	}
 
 	if ( op->ors_limit == NULL	/* isroot == TRUE */ ||
@@ -750,6 +752,10 @@ adminlimit:
 			send_ldap_result( op, rs );
 			goto done;
 		}
+
+		if ( admincheck )
+			goto adminlimit;
+
 		id = mdb_idl_first( candidates, &cursor );
 		if ( id == NOID ) {
 			Debug( LDAP_DEBUG_TRACE, 
@@ -768,6 +774,8 @@ adminlimit:
 	if ( nsubs < ncand ) {
 		int rc;
 		/* Do scope-based search */
+		if ( admincheck && nsubs > (unsigned) op->ors_limit->lms_s_unchecked )
+			goto adminlimit;
 
 		/* if any alias scopes were set, save them */
 		if (scopes[0].mid > 1) {
@@ -793,6 +801,8 @@ adminlimit:
 			id = isc.id;
 		cscope = 0;
 	} else {
+		if ( admincheck )
+			goto adminlimit;
 		id = mdb_idl_first( candidates, &cursor );
 	}
 
@@ -1203,8 +1213,6 @@ nochange:
 		send_ldap_result( op, rs );
 	}
 
-	rs->sr_err = LDAP_SUCCESS;
-
 done:
 	if ( cb.sc_private ) {
 		/* remove our writewait callback */
@@ -1318,7 +1326,7 @@ static void *search_stack( Operation *op )
 	}
 
 	if ( !ic ) {
-		ic = ch_malloc(( mdb->mi_search_stack_depth + 2 ) * MDB_idl_um_size
+		ic = ch_malloc(( mdb->mi_search_stack_depth + 2 ) * (size_t)MDB_idl_um_size
 			* sizeof( ID ) + sizeof( IDLchunk ) );
 		ic->logn = MDB_idl_logn;
 		if ( op->o_threadctx ) {

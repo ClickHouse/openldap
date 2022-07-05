@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2008-2020 The OpenLDAP Foundation.
+ * Copyright 2008-2022 The OpenLDAP Foundation.
  * Portions Copyright 2008 Emmanuel Dreyfus
  * All rights reserved.
  *
@@ -30,7 +30,7 @@
 
 #include "lutil.h"
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 
 enum { CLOAK_ATTR = 1 };
 

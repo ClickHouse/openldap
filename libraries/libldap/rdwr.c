@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
  *
  * Does not support cancellation nor does any status checking.
  */
-/* Adapted from publically available examples for:
+/* Adapted from publicly available examples for:
  *	"Programming with Posix Threads"
  *		by David R Butenhof, Addison-Wesley 
  *		http://cseng.aw.com/bookpage.taf?ISBN=0-201-63392-2

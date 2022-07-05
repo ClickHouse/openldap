@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2020 The OpenLDAP Foundation.
+ * Copyright 2000-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,7 +23,7 @@
 
 #include "slap.h"
 #include "back-mdb.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 
 /* Find the ad, return -1 if not found,

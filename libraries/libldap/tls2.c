@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -165,7 +165,7 @@ ldap_pvt_tls_destroy( void )
  * Called once per implementation.
  */
 static int
-tls_init(tls_impl *impl )
+tls_init(tls_impl *impl, int do_threads )
 {
 	static int tls_initialized = 0;
 
@@ -177,9 +177,12 @@ tls_init(tls_impl *impl )
 
 	if ( impl->ti_inited++ ) return 0;
 
+	if ( do_threads ) {
 #ifdef LDAP_R_COMPILE
-	impl->ti_thr_init();
+		impl->ti_thr_init();
 #endif
+	}
+
 	return impl->ti_tls_init();
 }
 
@@ -187,16 +190,16 @@ tls_init(tls_impl *impl )
  * Initialize TLS subsystem. Called once per implementation.
  */
 int
-ldap_pvt_tls_init( void )
+ldap_pvt_tls_init( int do_threads )
 {
-	return tls_init( tls_imp );
+	return tls_init( tls_imp, do_threads );
 }
 
 /*
  * initialize a new TLS context
  */
 static int
-ldap_int_tls_init_ctx( struct ldapoptions *lo, int is_server )
+ldap_int_tls_init_ctx( struct ldapoptions *lo, int is_server, char *errmsg )
 {
 	int rc = 0;
 	tls_impl *ti = tls_imp;
@@ -205,7 +208,7 @@ ldap_int_tls_init_ctx( struct ldapoptions *lo, int is_server )
 	if ( lo->ldo_tls_ctx )
 		return 0;
 
-	tls_init( ti );
+	tls_init( ti, 0 );
 
 	if ( is_server && !lts.lt_certfile && !lts.lt_keyfile &&
 		!lts.lt_cacertfile && !lts.lt_cacertdir &&
@@ -258,7 +261,7 @@ ldap_int_tls_init_ctx( struct ldapoptions *lo, int is_server )
 		goto error_exit;
 	}
 
-	rc = ti->ti_ctx_init( lo, &lts, is_server );
+	rc = ti->ti_ctx_init( lo, &lts, is_server, errmsg );
 
 error_exit:
 	if ( rc < 0 && lo->ldo_tls_ctx != NULL ) {
@@ -285,10 +288,15 @@ int
 ldap_pvt_tls_init_def_ctx( int is_server )
 {
 	struct ldapoptions *lo = LDAP_INT_GLOBAL_OPT();   
+	char errmsg[ERRBUFSIZE];
 	int rc;
+	errmsg[0] = 0;
 	LDAP_MUTEX_LOCK( &tls_def_ctx_mutex );
-	rc = ldap_int_tls_init_ctx( lo, is_server );
+	rc = ldap_int_tls_init_ctx( lo, is_server, errmsg );
 	LDAP_MUTEX_UNLOCK( &tls_def_ctx_mutex );
+	if ( rc ) {
+		Debug1( LDAP_DEBUG_ANY,"TLS: init_def_ctx: %s.\n", errmsg );
+	}
 	return rc;
 }
 
@@ -342,7 +350,7 @@ ldap_int_tls_connect( LDAP *ld, LDAPConn *conn, const char *host )
 	Sockbuf *sb = conn->lconn_sb;
 	int	err;
 	tls_session	*ssl = NULL;
-	char *sni = (char *)host;
+	const char *sni = host;
 
 	if ( HAS_TLS( sb )) {
 		ber_sockbuf_ctrl( sb, LBER_SB_OPT_GET_SSL, (void *)&ssl );
@@ -382,8 +390,8 @@ ldap_int_tls_connect( LDAP *ld, LDAPConn *conn, const char *host )
 	 */
 	{
 		int numeric = 1;
-		char *c;
-		for ( c = sni; *c; c++ ) {
+		unsigned char *c;
+		for ( c = (unsigned char *)sni; *c; c++ ) {
 			if ( *c == ':' )	/* IPv6 address */
 				break;
 			if ( *c == '.' )
@@ -612,6 +620,7 @@ ldap_pvt_tls_config( LDAP *ld, int option, const char *arg )
 			return ldap_pvt_tls_set_option( ld, option, &i );
 		}
 		return -1;
+	case LDAP_OPT_X_TLS_PROTOCOL_MAX:
 	case LDAP_OPT_X_TLS_PROTOCOL_MIN: {
 		char *next;
 		long l;
@@ -730,6 +739,9 @@ ldap_pvt_tls_get_option( LDAP *ld, int option, void *arg )
 		break;
 	case LDAP_OPT_X_TLS_PROTOCOL_MIN:
 		*(int *)arg = lo->ldo_tls_protocol_min;
+		break;
+	case LDAP_OPT_X_TLS_PROTOCOL_MAX:
+		*(int *)arg = lo->ldo_tls_protocol_max;
 		break;
 	case LDAP_OPT_X_TLS_RANDOM_FILE:
 		*(char **)arg = lo->ldo_tls_randfile ?
@@ -958,18 +970,32 @@ ldap_pvt_tls_set_option( LDAP *ld, int option, void *arg )
 		if ( !arg ) return -1;
 		lo->ldo_tls_protocol_min = *(int *)arg;
 		return 0;
+	case LDAP_OPT_X_TLS_PROTOCOL_MAX:
+		if ( !arg ) return -1;
+		lo->ldo_tls_protocol_max = *(int *)arg;
+		return 0;
 	case LDAP_OPT_X_TLS_RANDOM_FILE:
 		if ( ld != NULL )
 			return -1;
 		if ( lo->ldo_tls_randfile ) LDAP_FREE (lo->ldo_tls_randfile );
 		lo->ldo_tls_randfile = (arg && *(char *)arg) ? LDAP_STRDUP( (char *) arg ) : NULL;
 		break;
-	case LDAP_OPT_X_TLS_NEWCTX:
+	case LDAP_OPT_X_TLS_NEWCTX: {
+		int rc;
+		char errmsg[ERRBUFSIZE];
 		if ( !arg ) return -1;
 		if ( lo->ldo_tls_ctx )
 			ldap_pvt_tls_ctx_free( lo->ldo_tls_ctx );
 		lo->ldo_tls_ctx = NULL;
-		return ldap_int_tls_init_ctx( lo, *(int *)arg );
+		errmsg[0] = 0;
+		rc = ldap_int_tls_init_ctx( lo, *(int *)arg, errmsg );
+		if ( rc && errmsg[0] ) {
+			if ( ld->ld_error )
+				LDAP_FREE( ld->ld_error );
+			ld->ld_error = LDAP_STRDUP( errmsg );
+		}
+		return rc;
+		}
 	case LDAP_OPT_X_TLS_CACERT:
 		if ( lo->ldo_tls_cacert.bv_val )
 			LDAP_FREE( lo->ldo_tls_cacert.bv_val );
@@ -1102,7 +1128,7 @@ ldap_int_tls_start ( LDAP *ld, LDAPConn *conn, LDAPURLDesc *srv )
 		host = "localhost";
 	}
 
-	(void) tls_init( tls_imp );
+	(void) tls_init( tls_imp, 0 );
 
 	/*
 	 * Use non-blocking io during SSL Handshake when a timeout is configured
@@ -1499,11 +1525,19 @@ ldap_X509dn2bv( void *x509_name, struct berval *bv, LDAPDN_rewrite_func *func,
 		for ( tag = ber_first_element( ber, &len, &rdn_end );
 			tag == LBER_SEQUENCE;
 			tag = ber_next_element( ber, &len, rdn_end )) {
+			if ( rdn_end > dn_end )
+				return LDAP_DECODING_ERROR;
 			tag = ber_skip_tag( ber, &len );
 			ber_skip_data( ber, len );
 			navas++;
 		}
 	}
+
+	/* Rewind and prepare to extract */
+	ber_rewind( ber );
+	tag = ber_first_element( ber, &len, &dn_end );
+	if ( tag != LBER_SET )
+		return LDAP_DECODING_ERROR;
 
 	/* Allocate the DN/RDN/AVA stuff as a single block */    
 	dnsize = sizeof(LDAPRDN) * (nrdns+1);
@@ -1516,16 +1550,12 @@ ldap_X509dn2bv( void *x509_name, struct berval *bv, LDAPDN_rewrite_func *func,
 	} else {
 		newDN = (LDAPDN)(char *)ptrs;
 	}
-	
+
 	newDN[nrdns] = NULL;
 	newRDN = (LDAPRDN)(newDN + nrdns+1);
 	newAVA = (LDAPAVA *)(newRDN + navas + nrdns);
 	baseAVA = newAVA;
 
-	/* Rewind and start extracting */
-	ber_rewind( ber );
-
-	tag = ber_first_element( ber, &len, &dn_end );
 	for ( i = nrdns - 1; i >= 0; i-- ) {
 		newDN[i] = newRDN;
 
@@ -1619,6 +1649,10 @@ allocd:
 				/* X.690 bitString value converted to RFC4517 Bit String */
 				rc = der_to_ldap_BitString( &Val, &newAVA->la_value );
 				goto allocd;
+			case LBER_DEFAULT:
+				/* decode error */
+				rc = LDAP_DECODING_ERROR;
+				goto nomem;
 			default:
 				/* Not a string type at all */
 				newAVA->la_flags = 0;
