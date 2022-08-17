@@ -135,7 +135,7 @@
  *
  *	@author	Howard Chu, Symas Corporation.
  *
- *	@copyright Copyright 2011-2020 Howard Chu, Symas Corp. All rights reserved.
+ *	@copyright Copyright 2011-2021 Howard Chu, Symas Corp. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted only as authorized by the OpenLDAP
@@ -200,7 +200,7 @@ typedef int mdb_filehandle_t;
 /** Library minor version */
 #define MDB_VERSION_MINOR	9
 /** Library patch version */
-#define MDB_VERSION_PATCH	26
+#define MDB_VERSION_PATCH	29
 
 /** Combine args a,b,c into a single integer for easy version comparisons */
 #define MDB_VERINT(a,b,c)	(((a) << 24) | ((b) << 16) | (c))
@@ -210,7 +210,7 @@ typedef int mdb_filehandle_t;
 	MDB_VERINT(MDB_VERSION_MAJOR,MDB_VERSION_MINOR,MDB_VERSION_PATCH)
 
 /** The release date of this library version */
-#define MDB_VERSION_DATE	"August 11, 2020"
+#define MDB_VERSION_DATE	"March 16, 2021"
 
 /** A stringifier for the version info */
 #define MDB_VERSTR(a,b,c,d)	"LMDB " #a "." #b "." #c ": (" d ")"
@@ -928,7 +928,7 @@ void *mdb_env_get_userctx(MDB_env *env);
 typedef void MDB_assert_func(MDB_env *env, const char *msg);
 
 	/** Set or reset the assert() callback of the environment.
-	 * Disabled if liblmdb is buillt with NDEBUG.
+	 * Disabled if liblmdb is built with NDEBUG.
 	 * @note This hack should become obsolete as lmdb's error handling matures.
 	 * @param[in] env An environment handle returned by #mdb_env_create().
 	 * @param[in] func An #MDB_assert_func function, or 0.

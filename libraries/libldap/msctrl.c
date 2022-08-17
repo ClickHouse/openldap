@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * Portions Copyright 2018 Howard Chu.
  * All rights reserved.
  *
@@ -264,7 +264,7 @@ ldap_create_extended_dn_control(
 #ifdef LDAP_CONTROL_X_SERVER_NOTIFICATION
 
 int
-ldap_create_sever_notification_control( LDAP *ld,
+ldap_create_server_notification_control( LDAP *ld,
                                     LDAPControl **ctrlp )
 {
 	assert( ld != NULL );

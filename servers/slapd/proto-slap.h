@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,8 @@
 
 LDAP_BEGIN_DECL
 
-struct config_args_s;	/* config.h */
-struct config_reply_s;	/* config.h */
+struct config_args_s;	/* slap-config.h */
+struct config_reply_s;	/* slap-config.h */
 
 /*
  * aci.c
@@ -504,13 +504,6 @@ LDAP_SLAPD_F (int) overlay_callback_after_backover LDAP_P((
 /*
  * bconfig.c
  */
-LDAP_SLAPD_F (int) slap_loglevel_register LDAP_P (( slap_mask_t m, struct berval *s ));
-LDAP_SLAPD_F (int) slap_loglevel_get LDAP_P(( struct berval *s, int *l ));
-LDAP_SLAPD_F (int) str2loglevel LDAP_P(( const char *s, int *l ));
-LDAP_SLAPD_F (int) loglevel2bvarray LDAP_P(( int l, BerVarray *bva ));
-LDAP_SLAPD_F (const char *) loglevel2str LDAP_P(( int l ));
-LDAP_SLAPD_F (int) loglevel2bv LDAP_P(( int l, struct berval *bv ));
-LDAP_SLAPD_F (int) loglevel_print LDAP_P(( FILE *out ));
 LDAP_SLAPD_F (int) slap_cf_aux_table_parse LDAP_P(( const char *word, void *bc, slap_cf_aux_table *tab0, LDAP_CONST char *tabmsg ));
 LDAP_SLAPD_F (int) slap_cf_aux_table_unparse LDAP_P(( void *bc, struct berval *bv, slap_cf_aux_table *tab0 ));
 
@@ -723,24 +716,6 @@ LDAP_SLAPD_F (int) read_config LDAP_P(( const char *fname, const char *dir ));
 LDAP_SLAPD_F (void) config_destroy LDAP_P ((void));
 LDAP_SLAPD_F (char **) slap_str2clist LDAP_P((
 	char ***, char *, const char * ));
-LDAP_SLAPD_F (int) bverb_to_mask LDAP_P((
-	struct berval *bword,  slap_verbmasks *v ));
-LDAP_SLAPD_F (int) verb_to_mask LDAP_P((
-	const char *word,  slap_verbmasks *v ));
-LDAP_SLAPD_F (int) verbs_to_mask LDAP_P((
-	int argc, char *argv[], slap_verbmasks *v, slap_mask_t *m ));
-LDAP_SLAPD_F (int) mask_to_verbs LDAP_P((
-	slap_verbmasks *v, slap_mask_t m, BerVarray *bva ));
-LDAP_SLAPD_F (int) mask_to_verbstring LDAP_P((
-	slap_verbmasks *v, slap_mask_t m, char delim, struct berval *bv ));
-LDAP_SLAPD_F (int) verbstring_to_mask LDAP_P((
-	slap_verbmasks *v, char *str, char delim, slap_mask_t *m ));
-LDAP_SLAPD_F (int) enum_to_verb LDAP_P((
-	slap_verbmasks *v, slap_mask_t m, struct berval *bv ));
-LDAP_SLAPD_F (int) slap_verbmasks_init LDAP_P(( slap_verbmasks **vp, slap_verbmasks *v ));
-LDAP_SLAPD_F (int) slap_verbmasks_destroy LDAP_P(( slap_verbmasks *v ));
-LDAP_SLAPD_F (int) slap_verbmasks_append LDAP_P(( slap_verbmasks **vp,
-	slap_mask_t m, struct berval *v, slap_mask_t *ignore ));
 LDAP_SLAPD_F (int) slap_tls_get_config LDAP_P((
 	LDAP *ld, int opt, char **val ));
 LDAP_SLAPD_F (void) bindconf_tls_defaults LDAP_P(( slap_bindconf *bc ));
@@ -800,6 +775,7 @@ LDAP_SLAPD_F (Connection *) connection_init LDAP_P((
 	struct berval *id
 	LDAP_PF_LOCAL_SENDMSG_ARG(struct berval *peerbv)));
 
+LDAP_SLAPD_F (void) operation_counter_init LDAP_P(( Operation *op, void *threadctx ));
 LDAP_SLAPD_F (void) connection_closing LDAP_P((
 	Connection *c, const char *why ));
 LDAP_SLAPD_F (int) connection_is_active LDAP_P(( ber_socket_t s ));
@@ -809,10 +785,10 @@ LDAP_SLAPD_F (const char *) connection_state2str LDAP_P(( int state ))
 
 LDAP_SLAPD_F (int) connection_read_activate LDAP_P((ber_socket_t s));
 LDAP_SLAPD_F (int) connection_write LDAP_P((ber_socket_t s));
-LDAP_SLAPD_F (int) connection_write_resume LDAP_P((Connection *c));
+LDAP_SLAPD_F (void) connection_write_resume LDAP_P((Connection *c));
 
 LDAP_SLAPD_F (void) connection_op_finish LDAP_P((
-	Operation *op ));
+	Operation *op, int lock ));
 
 LDAP_SLAPD_F (unsigned long) connections_nextid(void);
 
@@ -894,7 +870,6 @@ LDAP_SLAPD_F (void) slap_resume_listeners LDAP_P((void));
 
 LDAP_SLAPD_F (int) slap_pause_server LDAP_P((void));
 LDAP_SLAPD_F (int) slap_unpause_server LDAP_P((void));
-LDAP_SLAPD_F (void) slap_sockaddrstr LDAP_P((Sockaddr *sa, struct berval *));
 
 LDAP_SLAPD_F (void) slapd_set_write LDAP_P((ber_socket_t s, int wake));
 LDAP_SLAPD_F (void) slapd_clr_write LDAP_P((ber_socket_t s, int wake));
@@ -928,6 +903,9 @@ LDAP_SLAPD_V (SOCKET *) slapd_ws_sockets;
 #define	SLAP_SOCK2FD(s)	s
 #define	SLAP_SOCKNEW(s)	s
 #endif
+
+LDAP_SLAPD_V (ldap_pvt_thread_mutex_t) slapd_init_mutex;
+LDAP_SLAPD_V (ldap_pvt_thread_cond_t) slapd_init_cond;
 
 /*
  * dn.c
@@ -1240,16 +1218,40 @@ LDAP_SLAPD_F (FILE *) lock_fopen LDAP_P(( const char *fname,
 LDAP_SLAPD_F (int) lock_fclose LDAP_P(( FILE *fp, FILE *lfp ));
 
 /*
+ * logging.c
+ */
+LDAP_SLAPD_F (int) slap_loglevel_get LDAP_P(( struct berval *s, int *l ));
+LDAP_SLAPD_F (void) slap_loglevel_destroy LDAP_P(( void ));
+LDAP_SLAPD_F (int) str2loglevel LDAP_P(( const char *s, int *l ));
+LDAP_SLAPD_F (int) loglevel2bvarray LDAP_P(( int l, BerVarray *bva ));
+LDAP_SLAPD_F (const char *) loglevel2str LDAP_P(( int l ));
+LDAP_SLAPD_F (int) loglevel2bv LDAP_P(( int l, struct berval *bv ));
+LDAP_SLAPD_F (int) loglevel_print LDAP_P(( FILE *out ));
+LDAP_SLAPD_F (void) slap_debug_print LDAP_P(( const char *data ));
+LDAP_SLAPD_F (int) logfile_open LDAP_P(( const char *path ));
+LDAP_SLAPD_F (void) logfile_close LDAP_P(( void ));
+LDAP_SLAPD_F (void) slap_syslog_set LDAP_P(( int l ));
+LDAP_SLAPD_F (int) slap_syslog_get LDAP_P(( void ));
+LDAP_SLAPD_F (void) slap_debug_set LDAP_P(( int l ));
+LDAP_SLAPD_F (int) slap_debug_get LDAP_P(( void ));
+LDAP_SLAPD_F (const char *) logfile_name LDAP_P(( void ));
+LDAP_SLAPD_F (int)
+slap_parse_syslog_level LDAP_P(( const char *arg, int *levelp ));
+LDAP_SLAPD_F (int)
+slap_parse_syslog_user LDAP_P(( const char *arg, int *syslogUser ));
+LDAP_SLAPD_F (int)
+slap_parse_debug_level LDAP_P(( const char *arg, int *levelp, int which ));
+LDAP_SLAPD_F (int)
+slap_parse_debug_unknowns LDAP_P(( void ));
+LDAP_SLAPD_F (void)
+slap_check_unknown_level LDAP_P(( char *levelstr, int level ));
+LDAP_SLAPD_V(ldap_pvt_thread_mutex_t) logfile_mutex;
+LDAP_SLAPD_V(int) slap_debug_orig;
+LDAP_SLAPD_V (char *)	serverName;
+
+/*
  * main.c
  */
-LDAP_SLAPD_F (int)
-parse_debug_level LDAP_P(( const char *arg, int *levelp, char ***unknowns ));
-LDAP_SLAPD_F (int)
-parse_syslog_level LDAP_P(( const char *arg, int *levelp ));
-LDAP_SLAPD_F (int)
-parse_syslog_user LDAP_P(( const char *arg, int *syslogUser ));
-LDAP_SLAPD_F (int)
-parse_debug_unknowns LDAP_P(( char **unknowns, int *levelp ));
 
 /*
  * matchedValues.c
@@ -1556,6 +1558,11 @@ LDAP_SLAPD_F (void) slap_passwd_init (void);
  * phonetic.c
  */
 LDAP_SLAPD_F (char *) phonetic LDAP_P(( char *s ));
+
+/*
+ * proxyp.c
+ */
+LDAP_SLAPD_F (int) proxyp LDAP_P((ber_socket_t sfd, Sockaddr *from));
 
 /*
  * referral.c
@@ -2020,6 +2027,30 @@ LDAP_SLAPD_F (int) value_add_one LDAP_P((
 /* assumes (x) > (y) returns 1 if true, 0 otherwise */
 #define SLAP_PTRCMP(x, y) ((x) < (y) ? -1 : (x) > (y))
 
+/*
+ * verbs.c
+ */
+LDAP_SLAPD_F (int) bverb_to_mask LDAP_P((
+	struct berval *bword,  slap_verbmasks *v ));
+LDAP_SLAPD_F (int) verb_to_mask LDAP_P((
+	const char *word,  slap_verbmasks *v ));
+LDAP_SLAPD_F (int) verbs_to_mask LDAP_P((
+	int argc, char *argv[], slap_verbmasks *v, slap_mask_t *m ));
+LDAP_SLAPD_F (int) mask_to_verbs LDAP_P((
+	slap_verbmasks *v, slap_mask_t m, BerVarray *bva ));
+LDAP_SLAPD_F (int) mask_to_verbstring LDAP_P((
+	slap_verbmasks *v, slap_mask_t m, char delim, struct berval *bv ));
+LDAP_SLAPD_F (int) verbstring_to_mask LDAP_P((
+	slap_verbmasks *v, char *str, char delim, slap_mask_t *m ));
+LDAP_SLAPD_F (int) enum_to_verb LDAP_P((
+	slap_verbmasks *v, slap_mask_t m, struct berval *bv ));
+LDAP_SLAPD_F (int) slap_verbmasks_init LDAP_P(( slap_verbmasks **vp, slap_verbmasks *v ));
+LDAP_SLAPD_F (int) slap_verbmasks_destroy LDAP_P(( slap_verbmasks *v ));
+LDAP_SLAPD_F (int) slap_verbmasks_append LDAP_P(( slap_verbmasks **vp,
+	slap_mask_t m, struct berval *v, slap_mask_t *ignore ));
+LDAP_SLAPD_F (int) slap_verbmask_register LDAP_P(( slap_verbmasks *vm_,
+	slap_verbmasks **vmp, struct berval *bv, int mask ));
+
 #ifdef SLAP_ZONE_ALLOC
 /*
  * zn_malloc.c
@@ -2061,6 +2092,7 @@ LDAP_SLAPD_V (ber_len_t) sockbuf_max_incoming;
 LDAP_SLAPD_V (ber_len_t) sockbuf_max_incoming_auth;
 LDAP_SLAPD_V (int)		slap_conn_max_pending;
 LDAP_SLAPD_V (int)		slap_conn_max_pending_auth;
+LDAP_SLAPD_V (int)		slap_max_filter_depth;
 
 LDAP_SLAPD_V (slap_mask_t)	global_allows;
 LDAP_SLAPD_V (slap_mask_t)	global_disallows;

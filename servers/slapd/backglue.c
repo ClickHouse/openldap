@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2020 The OpenLDAP Foundation.
+ * Copyright 2001-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@
 #define SLAPD_TOOLS
 #include "slap.h"
 #include "lutil.h"
-#include "config.h"
+#include "slap-config.h"
 
 typedef struct gluenode {
 	BackendDB *gn_be;
@@ -1327,7 +1327,7 @@ glue_db_destroy (
 	glueinfo		*gi = (glueinfo *)on->on_bi.bi_private;
 
 	free (gi);
-	return SLAP_CB_CONTINUE;
+	return 0;
 }
 
 static int
@@ -1381,6 +1381,11 @@ glue_sub_del( BackendDB *b0 )
 				gi->gi_nodes--;
 			}
 		}
+		/* Mark as no longer linked/sub */
+		b0->be_flags &= ~(SLAP_DBFLAG_GLUE_SUBORDINATE|SLAP_DBFLAG_GLUE_LINKED|
+			SLAP_DBFLAG_GLUE_ADVERTISE);
+		b0->be_pcsn_p = &b0->be_pcsn_st;
+		break;
 	}
 	if ( be == NULL )
 		rc = LDAP_NO_SUCH_OBJECT;
@@ -1440,6 +1445,7 @@ glue_sub_attach( int online )
 				&gi->gi_n[gi->gi_nodes].gn_pdn );
 			gi->gi_nodes++;
 			on->on_bi.bi_private = gi;
+			ga->ga_be->be_pcsn_p = be->be_pcsn_p;
 			ga->ga_be->be_flags |= SLAP_DBFLAG_GLUE_LINKED;
 			break;
 		}

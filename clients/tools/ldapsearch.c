@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * Portions Copyright 1998-2003 Kurt D. Zeilenga.
  * Portions Copyright 1998-2001 Net Boolean Incorporated.
  * Portions Copyright 2001-2003 IBM Corporation.
@@ -132,7 +132,7 @@ usage( void )
 	fprintf( stderr, _("             !dontUseCopy                (Don't Use Copy)\n"));
 	fprintf( stderr, _("             [!]mv=<filter>              (RFC 3876 matched values filter)\n"));
 	fprintf( stderr, _("             [!]pr=<size>[/prompt|noprompt] (RFC 2696 paged results/prompt)\n"));
-	fprintf( stderr, _("             [!]ps=<changetypes>/<changesonly>/<echg> (draft persisten search)\n"));
+	fprintf( stderr, _("             [!]ps=<changetypes>/<changesonly>/<echg> (draft persistent search)\n"));
 	fprintf( stderr, _("             [!]sss=[-]<attr[:OID]>[/[-]<attr[:OID]>...]\n"));
 	fprintf( stderr, _("                                         (RFC 2891 server side sorting)\n"));
 	fprintf( stderr, _("             [!]subentries[=true|false]  (RFC 3672 subentries)\n"));
@@ -479,7 +479,7 @@ handle_private_option( int i )
 			pagedResults = 1 + crit;
 
 		} else if ( strcasecmp( control, "ps" ) == 0 ) {
-			int num, tmp;
+			int num;
 			/* PersistentSearch control */
 			if ( psearch != 0 ) {
 				fprintf( stderr,
@@ -785,7 +785,6 @@ handle_private_option( int i )
 
 #ifdef LDAP_CONTROL_X_SHOW_DELETED
 		} else if ( strcasecmp( control, "showDeleted" ) == 0 ) {
-			int num, tmp;
 			if( showDeleted ) {
 				fprintf( stderr,
 					_("showDeleted control previously specified\n"));
@@ -802,7 +801,6 @@ handle_private_option( int i )
 
 #ifdef LDAP_CONTROL_X_SERVER_NOTIFICATION
 		} else if ( strcasecmp( control, "serverNotif" ) == 0 ) {
-			int num, tmp;
 			if( serverNotif ) {
 				fprintf( stderr,
 					_("serverNotif control previously specified\n"));
@@ -1868,12 +1866,13 @@ again:
 			if ( ldapsync && sync_slimit != -1 &&
 					nresponses_psearch >= sync_slimit ) {
 				BerElement *msgidber = NULL;
-				struct berval *msgidvalp = NULL;
+				struct berval msgidval;
 				msgidber = ber_alloc_t(LBER_USE_DER);
 				ber_printf(msgidber, "{i}", msgid);
-				ber_flatten(msgidber, &msgidvalp);
+				ber_flatten2( msgidber, &msgidval, 0 );
 				ldap_extended_operation(ld, LDAP_EXOP_CANCEL,
-					msgidvalp, NULL, NULL, &cancel_msgid);
+					&msgidval, NULL, NULL, &cancel_msgid);
+				ber_free( msgidber, 1 );
 				nresponses_psearch = -1;
 			}
 		}

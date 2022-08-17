@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2020 The OpenLDAP Foundation.
+ * Copyright 2005-2022 The OpenLDAP Foundation.
  * Portions Copyright 2005 Pierangelo Masarati <ando@sys-net.it>
  * All rights reserved.
  *
@@ -31,7 +31,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 #include "ldif.h"
 
@@ -711,7 +711,6 @@ retcode_entry_response( Operation *op, SlapReply *rs, BackendInfo *bi, Entry *e 
 			return rs->sr_err = SLAPD_DISCONNECT;
 		}
 	
-		op->o_abandon = 1;
 		return rs->sr_err;
 	}
 
@@ -790,7 +789,7 @@ static ConfigDriver rc_cf_gen;
 
 static ConfigTable rccfg[] = {
 	{ "retcode-parent", "dn",
-		2, 2, 0, ARG_MAGIC|ARG_DN|RC_PARENT, rc_cf_gen,
+		2, 2, 0, ARG_MAGIC|ARG_DN|ARG_QUOTE|RC_PARENT, rc_cf_gen,
 		"( OLcfgOvAt:20.1 NAME 'olcRetcodeParent' "
 			"DESC '' "
 			"EQUALITY distinguishedNameMatch "
@@ -1238,10 +1237,14 @@ rc_cf_gen( ConfigArgs *c )
 		}
 		*--next = '\0';
 		
-		for ( rdip = &rd->rd_item; *rdip; rdip = &(*rdip)->rdi_next )
-			/* go to last */ ;
+		/* We're marked X-ORDERED 'VALUES', valx might be valid */
+		for ( i = 0, rdip = &rd->rd_item;
+			*rdip && (c->valx < 0 || i < c->valx);
+			rdip = &(*rdip)->rdi_next, i++ )
+			/* go to position */ ;
 
 		
+		rdi.rdi_next = *rdip;
 		*rdip = ( retcode_item_t * )ch_malloc( sizeof( retcode_item_t ) );
 		*(*rdip) = rdi;
 

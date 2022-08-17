@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2004-2020 The OpenLDAP Foundation.
+ * Copyright 2004-2022 The OpenLDAP Foundation.
  * Portions Copyright 2005 Symas Corporation.
  * All rights reserved.
  *
@@ -31,7 +31,7 @@
 #include "slap.h"
 #include "lutil.h"
 
-#include "config.h"
+#include "slap-config.h"
 
 /* config block */
 typedef struct translucent_info {
@@ -218,6 +218,16 @@ translucent_cf_gen( ConfigArgs *c )
 		}
 		return 0;
 	}
+
+	/* cn=config values could be deleted later, we only want one name
+	 * per value for valx to match. */
+	if ( c->op != SLAP_CONFIG_ADD && strchr( c->argv[1], ',' ) ) {
+		Debug( LDAP_DEBUG_CONFIG|LDAP_DEBUG_NONE, "%s: %s: "
+			"Supplying multiple attribute names in a single value is "
+			"unsupported and will be disallowed in a future version\n",
+			c->log, c->argv[0] );
+	}
+
 	a2 = str2anlist( *an, c->argv[1], "," );
 	if ( !a2 ) {
 		snprintf( c->cr_msg, sizeof( c->cr_msg ), "%s unable to parse attribute %s",
@@ -819,7 +829,7 @@ static int translucent_search_cb(Operation *op, SlapReply *rs) {
 		le = rs->sr_entry;
 		/* If entry is already on list, use it */
 		if ( tc->step & USE_LIST ) {
-			re = tavl_delete( &tc->list, le, entry_dn_cmp );
+			re = ldap_tavl_delete( &tc->list, le, entry_dn_cmp );
 			if ( re ) {
 				rs_flush_entry( op, rs, on );
 				rc = test_filter( op, re, tc->orig );
@@ -910,7 +920,7 @@ static int translucent_search_cb(Operation *op, SlapReply *rs) {
 		}
 		/* If both filters, save entry for later */
 		if ( tc->step == (USE_LIST|RMT_SIDE) ) {
-			tavl_insert( &tc->list, re, entry_dn_cmp, avl_dup_error );
+			ldap_tavl_insert( &tc->list, re, entry_dn_cmp, ldap_avl_dup_error );
 			rs->sr_entry = NULL;
 			rc = 0;
 		} else {
@@ -989,12 +999,41 @@ trans_filter_dup(Operation *op, Filter *f, AttributeName *an)
 	case LDAP_FILTER_GE:
 	case LDAP_FILTER_LE:
 	case LDAP_FILTER_APPROX:
-	case LDAP_FILTER_SUBSTRINGS:
 	case LDAP_FILTER_EXT:
 		if ( !f->f_av_desc || ad_inlist( f->f_av_desc, an )) {
+			AttributeAssertion *nava;
+
 			n = op->o_tmpalloc( sizeof(Filter), op->o_tmpmemctx );
 			n->f_choice = f->f_choice;
-			n->f_ava = f->f_ava;
+
+			nava = op->o_tmpalloc( sizeof(AttributeAssertion), op->o_tmpmemctx );
+			*nava = *f->f_ava;
+			n->f_ava = nava;
+
+			ber_dupbv_x( &n->f_av_value, &f->f_av_value, op->o_tmpmemctx );
+			n->f_next = NULL;
+		}
+		break;
+
+	case LDAP_FILTER_SUBSTRINGS:
+		if ( !f->f_av_desc || ad_inlist( f->f_av_desc, an )) {
+			SubstringsAssertion *nsub;
+
+			n = op->o_tmpalloc( sizeof(Filter), op->o_tmpmemctx );
+			n->f_choice = f->f_choice;
+
+			nsub = op->o_tmpalloc( sizeof(SubstringsAssertion), op->o_tmpmemctx );
+			*nsub = *f->f_sub;
+			n->f_sub = nsub;
+
+			if ( !BER_BVISNULL( &f->f_sub_initial ))
+				ber_dupbv_x( &n->f_sub_initial, &f->f_sub_initial, op->o_tmpmemctx );
+
+			ber_bvarray_dup_x( &n->f_sub_any, f->f_sub_any, op->o_tmpmemctx );
+
+			if ( !BER_BVISNULL( &f->f_sub_final ))
+				ber_dupbv_x( &n->f_sub_final, &f->f_sub_final, op->o_tmpmemctx );
+
 			n->f_next = NULL;
 		}
 		break;
@@ -1055,10 +1094,28 @@ trans_filter_free( Operation *op, Filter *f )
 			trans_filter_free( op, p );
 		}
 		break;
+	case LDAP_FILTER_EQUALITY:
+	case LDAP_FILTER_GE:
+	case LDAP_FILTER_LE:
+	case LDAP_FILTER_APPROX:
+	case LDAP_FILTER_SUBSTRINGS:
+	case LDAP_FILTER_EXT:
+		op->o_tmpfree( f->f_av_value.bv_val, op->o_tmpmemctx );
+		op->o_tmpfree( f->f_ava, op->o_tmpmemctx );
+		break;
 	default:
 		break;
 	}
 	op->o_tmpfree( f, op->o_tmpmemctx );
+}
+
+static int
+translucent_search_cleanup( Operation *op, SlapReply *rs )
+{
+	trans_ctx *tc = op->o_callback->sc_private;
+
+	op->ors_filter = tc->orig;
+	return LDAP_SUCCESS;
 }
 
 /*
@@ -1092,8 +1149,8 @@ static int translucent_search(Operation *op, SlapReply *rs) {
 	fr = ov->remote ? trans_filter_dup( op, op->ors_filter, ov->remote ) : NULL;
 	fl = ov->local ? trans_filter_dup( op, op->ors_filter, ov->local ) : NULL;
 	cb.sc_response = (slap_response *) translucent_search_cb;
+	cb.sc_cleanup = (slap_response *) translucent_search_cleanup;
 	cb.sc_private = &tc;
-	cb.sc_next = op->o_callback;
 
 	ov->db.be_acl = op->o_bd->be_acl;
 	tc.db = op->o_bd;
@@ -1105,27 +1162,39 @@ static int translucent_search(Operation *op, SlapReply *rs) {
 	tc.attrs = NULL;
 	fbv = op->ors_filterstr;
 
-	op->o_callback = &cb;
-
 	if ( fr || !fl ) {
+		Operation op2;
+		Opheader oh;
+
+		op2 = *op;
+		oh = *op->o_hdr;
+		oh.oh_conn = op->o_conn;
+		oh.oh_connid = op->o_connid;
+		op2.o_bd = &ov->db;
+		op2.o_hdr = &oh;
+		op2.o_extra = op->o_extra;
+		op2.o_callback = &cb;
+
 		tc.attrs = op->ors_attrs;
 		op->ors_slimit = SLAP_NO_LIMIT;
 		op->ors_attrs = slap_anlist_all_attributes;
-		op->o_bd = &ov->db;
 		tc.step |= RMT_SIDE;
 		if ( fl ) {
 			tc.step |= USE_LIST;
 			op->ors_filter = fr;
-			filter2bv_x( op, fr, &op->ors_filterstr );
+			filter2bv_x( op, fr, &op2.ors_filterstr );
 		}
-		rc = ov->db.bd_info->bi_op_search(op, rs);
+		rc = ov->db.bd_info->bi_op_search( &op2, rs );
 		if ( op->ors_attrs == slap_anlist_all_attributes )
 			op->ors_attrs = tc.attrs;
-		op->o_bd = tc.db;
 		if ( fl ) {
-			op->o_tmpfree( op->ors_filterstr.bv_val, op->o_tmpmemctx );
+			op->o_tmpfree( op2.ors_filterstr.bv_val, op2.o_tmpmemctx );
 		}
 	}
+
+	cb.sc_next = op->o_callback;
+	op->o_callback = &cb;
+
 	if ( fl && !rc ) {
 		tc.step |= LCL_SIDE;
 		op->ors_filter = fl;
@@ -1134,7 +1203,6 @@ static int translucent_search(Operation *op, SlapReply *rs) {
 		op->o_tmpfree( op->ors_filterstr.bv_val, op->o_tmpmemctx );
 	}
 	op->ors_filterstr = fbv;
-	op->ors_filter = tc.orig;
 	op->o_callback = cb.sc_next;
 	rs->sr_attrs = op->ors_attrs;
 	rs->sr_attr_flags = slap_attr_flags( rs->sr_attrs );
@@ -1144,7 +1212,7 @@ static int translucent_search(Operation *op, SlapReply *rs) {
 		if ( tc.list ) {
 			TAvlnode *av;
 
-			av = tavl_end( tc.list, TAVL_DIR_LEFT );
+			av = ldap_tavl_end( tc.list, TAVL_DIR_LEFT );
 			while ( av ) {
 				rs->sr_entry = av->avl_data;
 				if ( rc == LDAP_SUCCESS && LDAP_COMPARE_TRUE ==
@@ -1155,9 +1223,9 @@ static int translucent_search(Operation *op, SlapReply *rs) {
 				} else {
 					entry_free( rs->sr_entry );
 				}
-				av = tavl_next( av, TAVL_DIR_RIGHT );
+				av = ldap_tavl_next( av, TAVL_DIR_RIGHT );
 			}
-			tavl_free( tc.list, NULL );
+			ldap_tavl_free( tc.list, NULL );
 			rs->sr_flags = 0;
 			rs->sr_entry = NULL;
 		}
@@ -1371,7 +1439,7 @@ translucent_db_destroy( BackendDB *be, ConfigReply *cr )
 			backend_stopdown_one( &ov->db );
 		}
 
-		ldap_pvt_thread_mutex_destroy( &ov->db.be_pcl_mutex );
+		ldap_pvt_thread_mutex_destroy( &ov->db.be_pcsn_st.be_pcsn_mutex );
 		ch_free(ov);
 		on->on_bi.bi_private = NULL;
 	}

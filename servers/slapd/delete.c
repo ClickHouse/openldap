@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -171,6 +171,11 @@ fe_op_delete( Operation *op, SlapReply *rs )
 			struct berval	org_dn = BER_BVNULL;
 			struct berval	org_ndn = BER_BVNULL;
 			int		org_managedsait;
+
+			if ( op->o_txnSpec ) {
+				txn_preop( op, rs );
+				goto cleanup;
+			}
 
 			op->o_bd = op_be;
 			op->o_bd->be_delete( op, rs );

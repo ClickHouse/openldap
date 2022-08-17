@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2020 The OpenLDAP Foundation.
+ * Copyright 1999-2022 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * Portions Copyright 1999-2003 Howard Chu.
  * All rights reserved.
@@ -212,7 +212,7 @@ meta_back_bind( Operation *op, SlapReply *rs )
 			if ( LDAP_BACK_SINGLECONN( mi ) ) {
 				metaconn_t	*tmpmc;
 
-				while ( ( tmpmc = avl_delete( &mi->mi_conninfo.lai_tree, (caddr_t)mc, meta_back_conn_cmp ) ) != NULL )
+				while ( ( tmpmc = ldap_tavl_delete( &mi->mi_conninfo.lai_tree, (caddr_t)mc, meta_back_conn_cmp ) ) != NULL )
 				{
 					assert( !LDAP_BACK_PCONN_ISPRIV( mc ) );
 					Debug( LDAP_DEBUG_TRACE,
@@ -235,7 +235,7 @@ meta_back_bind( Operation *op, SlapReply *rs )
 			}
 
 			ber_bvreplace( &mc->mc_local_ndn, &op->o_req_ndn );
-			lerr = avl_insert( &mi->mi_conninfo.lai_tree, (caddr_t)mc,
+			lerr = ldap_tavl_insert( &mi->mi_conninfo.lai_tree, (caddr_t)mc,
 				meta_back_conndn_cmp, meta_back_conndn_dup );
 #if META_BACK_PRINT_CONNTREE > 0
 			meta_back_print_conntree( mi, "<<< meta_back_bind" );
@@ -1633,7 +1633,7 @@ meta_back_controls_add(
 	LDAPControl		**ctrls = NULL;
 	/* set to the maximum number of controls this backend can add */
 	LDAPControl		c[ 2 ] = {{ 0 }};
-	int			n = 0, i, j1 = 0, j2 = 0;
+	int			n = 0, i, j1 = 0, j2 = 0, skipped = 0;
 
 	*pctrls = NULL;
 
@@ -1719,12 +1719,22 @@ meta_back_controls_add(
 
 	i = 0;
 	if ( op->o_ctrls ) {
+		LDAPControl *proxyauthz = ldap_control_find(
+				LDAP_CONTROL_PROXY_AUTHZ, op->o_ctrls, NULL );
+
 		for ( i = 0; op->o_ctrls[ i ]; i++ ) {
-			ctrls[ i + j1 ] = op->o_ctrls[ i ];
+			/* Only replace it if we generated one */
+			if ( j1 && proxyauthz && proxyauthz == op->o_ctrls[ i ] ) {
+				/* Frontend has already checked only one is present */
+				assert( skipped == 0 );
+				skipped++;
+				continue;
+			}
+			ctrls[ i + j1 - skipped ] = op->o_ctrls[ i ];
 		}
 	}
 
-	n += j1;
+	n += j1 - skipped;
 	if ( j2 ) {
 		ctrls[ n ] = (LDAPControl *)&ctrls[ n + j2 + 1 ] + j1;
 		*ctrls[ n ] = c[ j1 ];

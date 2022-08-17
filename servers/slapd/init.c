@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,6 +88,9 @@ slap_init( int mode, const char *name )
 	slapMode = mode;
 
 	slap_op_init();
+
+	ldap_pvt_thread_mutex_init( &slapd_init_mutex );
+	ldap_pvt_thread_cond_init( &slapd_init_cond );
 
 #ifdef SLAPD_MODULES
 	if ( module_init() != 0 ) {
@@ -275,6 +278,9 @@ int slap_destroy(void)
 		break;
 
 	}
+
+	ldap_pvt_thread_mutex_destroy( &slapd_init_mutex );
+	ldap_pvt_thread_cond_destroy( &slapd_init_cond );
 
 	slap_op_destroy();
 

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -243,7 +243,7 @@ ldif_parse_line2(
  * or \0.  this routine handles continued lines, bundling them into
  * a single big line before returning.  if a line begins with a white
  * space character, it is a continuation of the previous line. the white
- * space character (nb: only one char), and preceeding newline are changed
+ * space character (nb: only one char), and preceding newline are changed
  * into CONTINUED_LINE_MARKER chars, to be deleted later by the
  * ldif_parse_line() routine above.
  *
@@ -432,9 +432,6 @@ ldif_must_b64_encode( LDAP_CONST char *s )
 	return 0;
 }
 
-/* compatibility with U-Mich off by two bug */
-#define LDIF_KLUDGE 2
-
 /* NOTE: only preserved for binary compatibility */
 void
 ldif_sput(
@@ -444,7 +441,7 @@ ldif_sput(
 	LDAP_CONST char *val,
 	ber_len_t vlen )
 {
-	ldif_sput_wrap( out, type, name, val, vlen, LDIF_LINE_WIDTH+LDIF_KLUDGE );
+	ldif_sput_wrap( out, type, name, val, vlen, 0 );
 }
 
 void
@@ -468,7 +465,7 @@ ldif_sput_wrap(
 	ber_len_t i;
 
 	if ( !wrap )
-		wrap = LDIF_LINE_WIDTH+LDIF_KLUDGE;
+		wrap = LDIF_LINE_WIDTH;
 
 	/* prefix */
 	switch( type ) {
@@ -664,7 +661,7 @@ ldif_put(
 	LDAP_CONST char *val,
 	ber_len_t vlen )
 {
-	return ldif_put_wrap( type, name, val, vlen, LDIF_LINE_WIDTH );
+	return ldif_put_wrap( type, name, val, vlen, 0 );
 }
 
 char *
@@ -732,7 +729,8 @@ ldif_open(
 	if ( fp ) {
 		lfp = ber_memalloc( sizeof( LDIFFP ));
 		if ( lfp == NULL ) {
-		    return NULL;
+			fclose( fp );
+			return NULL;
 		}
 		lfp->fp = fp;
 		lfp->prev = NULL;
@@ -799,6 +797,7 @@ ldif_read_record(
 		 * back to a previous file. (return from an include)
 		 */
 		while ( feof( lfp->fp )) {
+pop:
 			if ( lfp->prev ) {
 				LDIFFP *tmp = lfp->prev;
 				fclose( lfp->fp );
@@ -811,6 +810,10 @@ ldif_read_record(
 		}
 		if ( !stop ) {
 			if ( fgets( line, sizeof( line ), lfp->fp ) == NULL ) {
+				if ( !found_entry && !ferror( lfp->fp ) ) {
+					/* ITS#9811 Reached the end looking for an entry, try again */
+					goto pop;
+				}
 				stop = 1;
 				len = 0;
 			} else {
@@ -832,6 +835,7 @@ ldif_read_record(
 		/* Squash \r\n to \n */
 		if ( len > 1 && line[len-2] == '\r' ) {
 			len--;
+			line[len]   = '\0';
 			line[len-1] = '\n';
 		}
 

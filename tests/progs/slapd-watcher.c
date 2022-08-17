@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2020 The OpenLDAP Foundation.
+ * Copyright 1999-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 
+#include "ac/signal.h"
 #include "ac/stdlib.h"
 #include "ac/time.h"
 
@@ -51,6 +52,7 @@
 
 #define WAS_LATE	0x100
 #define WAS_DOWN	0x200
+#define WAS_INIT	0x400
 
 #define	MONFILTER	"(objectClass=monitorOperation)"
 
@@ -138,12 +140,13 @@ usage( char *name, char opt )
 		"[-x | -Y <SASL mech>] "
 		"[-i <interval>] "
 		"[-s <sids>] "
+		"[-c <contextDN>] "
 		"[-b <baseDN> ] URI[...]\n",
 		name );
 	exit( EXIT_FAILURE );
 }
 
-struct berval base;
+struct berval base, cbase;
 int interval = 10;
 int numservers;
 server *servers;
@@ -197,7 +200,6 @@ void display()
 {
 	int i, j;
 	struct timeval now;
-	struct tm *tm;
 	time_t now_t;
 
 	gettimeofday(&now, NULL);
@@ -208,6 +210,9 @@ void display()
 
 	for (i=0; i<numservers; i++) {
 		printf("\n%s", servers[i].url );
+		if ( !(servers[i].flags & WAS_INIT )) {
+			printf(", unknown");
+		}
 		if ( servers[i].flags & WAS_DOWN ) {
 			printf(", down@");
 			timestamp( &servers[i].down );
@@ -338,7 +343,7 @@ void get_counters(
 	BerElement *ber,
 	counters *c )
 {
-	int i, rc;
+	int rc;
 	slap_op_t op = SLAP_OP_BIND;
 	struct berval dn, bv, *bvals, **bvp = &bvals;
 
@@ -425,7 +430,7 @@ void get_csns(
 		if (j < numservers) {
 			ber_bvreplace( &c->vals[j], &bvs[i] );
 			lutil_parsetime(bvs[i].bv_val, &tm);
-			c->tvs[j].tv_usec = tm.tm_usec;
+			c->tvs[j].tv_usec = tm.tm_nsec / 1000;
 			lutil_tm2time( &tm, &tt );
 			c->tvs[j].tv_sec = tt.tt_sec;
 		}
@@ -433,10 +438,10 @@ void get_csns(
 }
 
 int
-setup_server( struct tester_conn_args *config, server *sv, int first )
+setup_server( struct tester_conn_args *config, server *sv )
 {
 	config->uri = sv->url;
-	tester_init_ld( &sv->ld, config, first ? 0 : TESTER_INIT_NOEXIT );
+	tester_init_ld( &sv->ld, config, TESTER_INIT_NOEXIT );
 	if ( !sv->ld )
 		return -1;
 
@@ -504,14 +509,12 @@ setup_server( struct tester_conn_args *config, server *sv, int first )
 
 		default:
 			tester_ldap_error( ld, "ldap_search_ext_s(cn=Monitor)", sv->url );
-			if ( first )
-				exit( EXIT_FAILURE );
 		}
 		ldap_msgfree( res );
 
-		if ( base.bv_val ) {
+		if ( cbase.bv_val ) {
 			char *attr2[] = { at_contextCSN.bv_val, NULL };
-			rc = ldap_search_ext_s( ld, base.bv_val, LDAP_SCOPE_BASE, "(objectClass=*)",
+			rc = ldap_search_ext_s( ld, cbase.bv_val, LDAP_SCOPE_BASE, "(objectClass=*)",
 				attr2, 0, NULL, NULL, NULL, LDAP_NO_LIMIT, &res );
 			switch(rc) {
 			case LDAP_SUCCESS:
@@ -541,8 +544,6 @@ setup_server( struct tester_conn_args *config, server *sv, int first )
 
 			default:
 				tester_ldap_error( ld, "ldap_search_ext_s(baseDN)", sv->url );
-				if ( first )
-					exit( EXIT_FAILURE );
 			}
 		}
 	}
@@ -557,8 +558,11 @@ setup_server( struct tester_conn_args *config, server *sv, int first )
 	} else if ( sv->flags & HAS_MONITOR ) {
 		sv->monitorfilter = (char *)default_monfilter;
 	}
-	if ( first )
+	if ( !( sv->flags & WAS_INIT )) {
+		sv->flags |= WAS_INIT;
 		rotate_stats( sv );
+	}
+	return 0;
 }
 
 int
@@ -567,16 +571,21 @@ main( int argc, char **argv )
 	int		i, rc, *msg1, *msg2;
 	char **sids = NULL;
 	struct tester_conn_args *config;
-	int first = 1;
 
 	config = tester_init( "slapd-watcher", TESTER_TESTER );
 	config->authmethod = LDAP_AUTH_SIMPLE;
 
-	while ( ( i = getopt( argc, argv, "D:O:R:U:X:Y:b:d:i:s:w:x" ) ) != EOF )
+	while ( ( i = getopt( argc, argv, "D:O:R:U:X:Y:b:c:d:i:s:w:x" ) ) != EOF )
 	{
 		switch ( i ) {
-		case 'b':		/* base DN for contextCSN lookups */
+		case 'b':		/* base DN for DB entrycount lookups */
 			ber_str2bv( optarg, 0, 0, &base );
+			if ( !cbase.bv_val )
+				cbase = base;
+			break;
+
+		case 'c':		/* base DN for contextCSN lookups */
+			ber_str2bv( optarg, 0, 0, &cbase );
 			break;
 
 		case 'i':
@@ -597,7 +606,9 @@ main( int argc, char **argv )
 	}
 
 	tester_config_finish( config );
-	signal(SIGPIPE, SIG_IGN);
+#ifdef SIGPIPE
+	(void) SIGNAL(SIGPIPE, SIG_IGN);
+#endif
 
 	/* don't clear the screen if debug is enabled */
 	if (debug)
@@ -625,7 +636,7 @@ main( int argc, char **argv )
 		monfilter = MONFILTER;
 	}
 
-	if ( numservers > 1 ) {
+	if ( sids || numservers > 1 ) {
 		for ( i=0; i<numservers; i++ )
 			if ( sids )
 				servers[i].sid = atoi(sids[i]);
@@ -658,7 +669,7 @@ main( int argc, char **argv )
 				msg2[i] = 0;
 			}
 			if ( !servers[i].ld ) {
-				setup_server( config, &servers[i], first );
+				setup_server( config, &servers[i] );
 			} else {
 				ld = servers[i].ld;
 				rc = -1;
@@ -673,35 +684,28 @@ main( int argc, char **argv )
 						attrs, 0, NULL, NULL, NULL, LDAP_NO_LIMIT, &msg1[i] );
 					if ( rc != LDAP_SUCCESS ) {
 						tester_ldap_error( ld, "ldap_search_ext(cn=Monitor)", servers[i].url );
-						if ( first )
-							exit( EXIT_FAILURE );
-						else {
 server_down1:
-							ldap_unbind_ext( ld, NULL, NULL );
-							servers[i].flags |= WAS_DOWN;
-							servers[i].ld = NULL;
-							gettimeofday( &tv, NULL );
-							servers[i].down = tv.tv_sec;
-							msg1[i] = 0;
-							msg2[i] = 0;
-							continue;
-						}
+						ldap_unbind_ext( ld, NULL, NULL );
+						servers[i].flags |= WAS_DOWN;
+						servers[i].ld = NULL;
+						gettimeofday( &tv, NULL );
+						servers[i].down = tv.tv_sec;
+						msg1[i] = 0;
+						msg2[i] = 0;
+						continue;
 					}
 				}
 				if (( servers[i].flags & HAS_BASE ) && !msg2[i] ) {
 					char *attrs[2] = { at_contextCSN.bv_val };
-					rc = ldap_search_ext( ld, base.bv_val,
+					rc = ldap_search_ext( ld, cbase.bv_val,
 						LDAP_SCOPE_BASE, "(objectClass=*)",
 						attrs, 0, NULL, NULL, NULL, LDAP_NO_LIMIT, &msg2[i] );
 					if ( rc != LDAP_SUCCESS ) {
 						tester_ldap_error( ld, "ldap_search_ext(baseDN)", servers[i].url );
-						if ( first )
-							exit( EXIT_FAILURE );
-						else
-							goto server_down1;
+						goto server_down1;
 					}
 				}
-				if ( rc != -1 );
+				if ( rc != -1 )
 					gettimeofday( &servers[i].c_curr.time, 0 );
 			}
 		}
@@ -714,18 +718,14 @@ server_down1:
 				rc = ldap_result( ld, msg1[i], LDAP_MSG_ALL, &tv, &res );
 				if ( rc < 0 ) {
 					tester_ldap_error( ld, "ldap_result(cn=Monitor)", servers[i].url );
-					if ( first )
-						exit( EXIT_FAILURE );
-					else {
 server_down2:
-						ldap_unbind_ext( ld, NULL, NULL );
-						servers[i].flags |= WAS_DOWN;
-						servers[i].ld = NULL;
-						servers[i].down = servers[i].c_curr.time.tv_sec;
-						msg1[i] = 0;
-						msg2[i] = 0;
-						continue;
-					}
+					ldap_unbind_ext( ld, NULL, NULL );
+					servers[i].flags |= WAS_DOWN;
+					servers[i].ld = NULL;
+					servers[i].down = servers[i].c_curr.time.tv_sec;
+					msg1[i] = 0;
+					msg2[i] = 0;
+					continue;
 				}
 				if ( rc == 0 ) {
 					if ( !( servers[i].flags & WAS_LATE ))
@@ -767,10 +767,7 @@ server_down2:
 				rc = ldap_result( ld, msg2[i], LDAP_MSG_ALL, &tv, &res );
 				if ( rc < 0 ) {
 					tester_ldap_error( ld, "ldap_result(baseDN)", servers[i].url );
-					if ( first )
-						exit( EXIT_FAILURE );
-					else
-						goto server_down2;
+					goto server_down2;
 				}
 				if ( rc == 0 ) {
 					if ( !( servers[i].flags & WAS_LATE ))
@@ -805,7 +802,6 @@ server_down2:
 		}
 		display();
 		sleep(interval);
-		first = 0;
 	}
 
 	exit( EXIT_SUCCESS );

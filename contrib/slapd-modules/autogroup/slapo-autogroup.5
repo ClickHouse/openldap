@@ -1,5 +1,5 @@
 .TH SLAPO-AUTOGROUP 5 "RELEASEDATE" "OpenLDAP LDVERSION"
-.\" Copyright 1998-2020 The OpenLDAP Foundation All Rights Reserved.
+.\" Copyright 1998-2022 The OpenLDAP Foundation All Rights Reserved.
 .\" Portions Copyright \[u00A9] 2007 Michał Szulczyński.
 .\" Copying restrictions apply.  See the COPYRIGHT file.
 .\" $OpenLDAP$
@@ -93,10 +93,15 @@ The autogroup overlay has been reworked with the 2.5 release to use
 a consistent namespace as with other overlays. As a side-effect the
 following cn=config parameters are deprecated and will be removed in
 a future release:
+.IP \[bu] 2
 .B olcAGattrSet
 is replaced with olcAutoGroupAttrSet
+.IP \[bu]
 .B olcAGmemberOfAd
 is replaced with olcAutoGroupMemberOfAd
+.IP \[bu]
+.B olcAutomaticGroups
+is replaced with olcAutoGroupConfig
 .SH ACKNOWLEDGEMENTS
 This module was originally written in 2007 by Michał
 Szulczyński.  Further enhancements were contributed by Howard
@@ -106,6 +111,6 @@ updates provided by Emily Backes.
 .BR slapd.conf (5),
 .BR slapd (8).
 .SH Copyrights
-Copyright 1998-2020 The OpenLDAP Foundation.
+Copyright 1998-2022 The OpenLDAP Foundation.
 Portions Copyright \[u00A9] 2007 Michał Szulczyński.
 All rights reserved.

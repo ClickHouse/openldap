@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -203,6 +203,11 @@ int passwd_extop(
 		goto error_return;
 	}
 
+	if ( op->o_txnSpec ) {
+		rc = txn_preop( op, rs );
+		goto error_return;
+	}
+
 	op->o_bd = op_be;
 
 	/* Give the backend a chance to handle this itself */
@@ -284,7 +289,7 @@ old_good:
 		rs->sr_err = LDAP_OTHER;
 
 	} else {
-		slap_callback *sc = op->o_callback;
+		slap_callback **sc;
 
 		op->o_tag = LDAP_REQ_MODIFY;
 		op->o_callback = &cb;
@@ -307,7 +312,12 @@ old_good:
 			rsp = NULL;
 		}
 		op->o_tag = LDAP_REQ_EXTENDED;
-		op->o_callback = sc;
+		for ( sc = &op->o_callback; *sc; sc = &(*sc)->sc_next ) {
+			if ( *sc == &cb ) {
+				*sc = cb.sc_next;
+				break;
+			}
+		}
 	}
 
 	rc = rs->sr_err;

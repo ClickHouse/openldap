@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@
 #include <sys/stat.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 #include "lber_pvt.h"
 
@@ -199,10 +199,7 @@ int backend_startup_one(Backend *be, ConfigReply *cr)
 
 	assert( be != NULL );
 
-	be->be_pending_csn_list = (struct be_pcl *)
-		ch_calloc( 1, sizeof( struct be_pcl ) );
-
-	LDAP_TAILQ_INIT( be->be_pending_csn_list );
+	LDAP_TAILQ_INIT( &be->be_pcsn_st.be_pcsn_list );
 
 	Debug( LDAP_DEBUG_TRACE,
 		"backend_startup_one: starting \"%s\"\n",
@@ -226,6 +223,7 @@ int backend_startup_one(Backend *be, ConfigReply *cr)
 		rc = be->bd_info->bi_db_open( be, cr );
 		if ( rc == 0 ) {
 			(void)backend_set_controls( be );
+			be->be_flags |= SLAP_DBFLAG_OPEN;
 
 		} else {
 			char *type = be->bd_info->bi_type;
@@ -291,6 +289,7 @@ int backend_startup(Backend *be)
 				rc );
 			return rc;
 		}
+		frontendDB->be_flags |= SLAP_DBFLAG_OPEN;
 	}
 
 	/* open each backend type */
@@ -365,6 +364,7 @@ int backend_shutdown( Backend *be )
 
 		if ( be->bd_info->bi_db_close ) {
 			rc = be->bd_info->bi_db_close( be, NULL );
+			be->be_flags &= ~SLAP_DBFLAG_OPEN;
 			if ( rc ) return rc;
 		}
 
@@ -382,6 +382,7 @@ int backend_shutdown( Backend *be )
 			continue;
 		if ( be->bd_info->bi_db_close ) {
 			be->bd_info->bi_db_close( be, NULL );
+			be->be_flags &= ~SLAP_DBFLAG_OPEN;
 		}
 
 		if(rc != 0) {
@@ -406,6 +407,7 @@ int backend_shutdown( Backend *be )
 	/* close frontend, if required */
 	if ( frontendDB->bd_info->bi_db_close ) {
 		rc = frontendDB->bd_info->bi_db_close ( frontendDB, NULL );
+		frontendDB->be_flags &= ~SLAP_DBFLAG_OPEN;
 		if ( rc != 0 ) {
 			Debug( LDAP_DEBUG_ANY,
 				"backend_startup: bi_db_close(frontend) failed! (%d)\n",
@@ -428,18 +430,15 @@ int backend_shutdown( Backend *be )
 void
 backend_stopdown_one( BackendDB *bd )
 {
-	if ( bd->be_pending_csn_list ) {
-		struct slap_csn_entry *csne;
-		csne = LDAP_TAILQ_FIRST( bd->be_pending_csn_list );
-		while ( csne ) {
-			struct slap_csn_entry *tmp_csne = csne;
+	struct slap_csn_entry *csne;
+	csne = LDAP_TAILQ_FIRST( &bd->be_pcsn_st.be_pcsn_list );
+	while ( csne ) {
+		struct slap_csn_entry *tmp_csne = csne;
 
-			LDAP_TAILQ_REMOVE( bd->be_pending_csn_list, csne, ce_csn_link );
-			ch_free( csne->ce_csn.bv_val );
-			csne = LDAP_TAILQ_NEXT( csne, ce_csn_link );
-			ch_free( tmp_csne );
-		}
-		ch_free( bd->be_pending_csn_list );
+		LDAP_TAILQ_REMOVE( &bd->be_pcsn_st.be_pcsn_list, csne, ce_csn_link );
+		ch_free( csne->ce_csn.bv_val );
+		csne = LDAP_TAILQ_NEXT( csne, ce_csn_link );
+		ch_free( tmp_csne );
 	}
 
 	if ( bd->bd_info->bi_db_destroy ) {
@@ -482,7 +481,7 @@ void backend_destroy_one( BackendDB *bd, int dynamic )
 		ber_bvarray_free( bd->be_update_refs );
 	}
 
-	ldap_pvt_thread_mutex_destroy( &bd->be_pcl_mutex );
+	ldap_pvt_thread_mutex_destroy( &bd->be_pcsn_st.be_pcsn_mutex );
 
 	if ( dynamic ) {
 		free( bd );
@@ -619,7 +618,8 @@ backend_db_init(
 	be->be_requires = frontendDB->be_requires;
 	be->be_ssf_set = frontendDB->be_ssf_set;
 
-	ldap_pvt_thread_mutex_init( &be->be_pcl_mutex );
+	ldap_pvt_thread_mutex_init( &be->be_pcsn_st.be_pcsn_mutex );
+	be->be_pcsn_p = &be->be_pcsn_st;
 
  	/* assign a default depth limit for alias deref */
 	be->be_max_deref_depth = SLAPD_DEFAULT_MAXDEREFDEPTH; 
@@ -633,7 +633,7 @@ backend_db_init(
 		/* If we created and linked this be, remove it and free it */
 		if ( !b0 ) {
 			LDAP_STAILQ_REMOVE(&backendDB, be, BackendDB, be_next);
-			ldap_pvt_thread_mutex_destroy( &be->be_pcl_mutex );
+			ldap_pvt_thread_mutex_destroy( &be->be_pcsn_st.be_pcsn_mutex );
 			ch_free( be );
 			be = NULL;
 			nbackends--;
@@ -655,6 +655,7 @@ be_db_close( void )
 	LDAP_STAILQ_FOREACH( be, &backendDB, be_next ) {
 		if ( be->bd_info->bi_db_close ) {
 			be->bd_info->bi_db_close( be, NULL );
+			be->be_flags &= ~SLAP_DBFLAG_OPEN;
 		}
 	}
 

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2008-2020 The OpenLDAP Foundation.
+ * Copyright 2008-2022 The OpenLDAP Foundation.
  * Portions Copyright 2008 Howard Chu.
  * Portions Copyright 2013 Ted C. Cheng, Symas Corp.
  * All rights reserved.
@@ -28,6 +28,7 @@
 #endif
 
 #include <stdio.h>
+#include <errno.h>
 
 #include "nslcd.h"
 #include "nslcd-prot.h"

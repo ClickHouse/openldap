@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2020 The OpenLDAP Foundation.
+ * Copyright 2000-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
 
 #include "../back-monitor/back-monitor.h"
 
-#include "config.h"
+#include "slap-config.h"
 
 static ObjectClass		*oc_olmMDBDatabase;
 
@@ -578,10 +578,11 @@ mdb_monitor_db_close( BackendDB *be )
 		monitor_extra_t		*mbe;
 
 		if ( mi && mi->bi_extra ) {
+			struct berval dummy = BER_BVNULL;
 			mbe = mi->bi_extra;
 			mbe->unregister_entry_callback( &mdb->mi_monitor.mdm_ndn,
 				(monitor_callback_t *)mdb->mi_monitor.mdm_cb,
-				NULL, 0, NULL );
+				&dummy, 0, &dummy );
 		}
 
 		memset( &mdb->mi_monitor, 0, sizeof( mdb->mi_monitor ) );
@@ -601,7 +602,7 @@ mdb_monitor_db_destroy( BackendDB *be )
 
 	/* TODO: free tree */
 	ldap_pvt_thread_mutex_destroy( &mdb->mi_idx_mutex );
-	avl_free( mdb->mi_idx, ch_free );
+	ldap_avl_free( mdb->mi_idx, ch_free );
 #endif /* MDB_MONITOR_IDX */
 
 	return 0;
@@ -690,14 +691,14 @@ mdb_monitor_idx_add(
 
 	ldap_pvt_thread_mutex_lock( &mdb->mi_idx_mutex );
 
-	idx = (monitor_idx_t *)avl_find( mdb->mi_idx,
+	idx = (monitor_idx_t *)ldap_avl_find( mdb->mi_idx,
 		(caddr_t)&idx_dummy, monitor_idx_cmp );
 	if ( idx == NULL ) {
 		idx = (monitor_idx_t *)ch_calloc( sizeof( monitor_idx_t ), 1 );
 		idx->idx_ad = desc;
 		idx->idx_count[ key ] = 1;
 
-		switch ( avl_insert( &mdb->mi_idx, (caddr_t)idx, 
+		switch ( ldap_avl_insert( &mdb->mi_idx, (caddr_t)idx, 
 			monitor_idx_cmp, monitor_idx_dup ) )
 		{
 		case 0:
@@ -777,7 +778,7 @@ mdb_monitor_idx_entry_add(
 
 	ldap_pvt_thread_mutex_lock( &mdb->mi_idx_mutex );
 
-	avl_apply( mdb->mi_idx, mdb_monitor_idx_apply,
+	ldap_avl_apply( mdb->mi_idx, mdb_monitor_idx_apply,
 		&vals, -1, AVL_INORDER );
 
 	ldap_pvt_thread_mutex_unlock( &mdb->mi_idx_mutex );

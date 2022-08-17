@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1000,7 +1000,7 @@ slap_send_ldap_intermediate( Operation *op, SlapReply *rs )
 	rs->sr_msgid = op->o_msgid;
 	if ( send_ldap_response( op, rs ) == SLAP_CB_CONTINUE ) {
 		Debug( LDAP_DEBUG_STATS2,
-			"%s INTERM oid=%s\n",
+			"%s INTERMEDIATE oid=%s\n",
 			op->o_log_prefix,
 			rs->sr_rspoid ? rs->sr_rspoid : "" );
 	}
@@ -1806,7 +1806,7 @@ int slap_read_controls(
 	LDAPControl c;
 	Operation myop;
 
-	Debug( LDAP_DEBUG_ANY, "%s slap_read_controls: (%s) %s\n",
+	Debug( LDAP_DEBUG_STATS, "%s slap_read_controls: (%s) %s\n",
 		op->o_log_prefix, oid->bv_val, e->e_dn );
 
 	rs->sr_entry = e;

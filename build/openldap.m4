@@ -2,7 +2,7 @@ dnl OpenLDAP Autoconf Macros
 dnl $OpenLDAP$
 dnl This work is part of OpenLDAP Software <http://www.openldap.org/>.
 dnl
-dnl Copyright 1998-2020 The OpenLDAP Foundation.
+dnl Copyright 1998-2022 The OpenLDAP Foundation.
 dnl All rights reserved.
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -613,7 +613,7 @@ dnl ====================================================================
 dnl Look for fetch(3)
 AC_DEFUN([OL_LIB_FETCH],
 [ol_LIBS=$LIBS
-LIBS="-lfetch -lcom_err $LIBS"
+LIBS="-lfetch $LIBS"
 AC_CACHE_CHECK([fetch(3) library],ol_cv_lib_fetch,[
 	AC_LINK_IFELSE([AC_LANG_PROGRAM([[
 #ifdef HAVE_SYS_PARAM_H
@@ -623,7 +623,7 @@ AC_CACHE_CHECK([fetch(3) library],ol_cv_lib_fetch,[
 #include <fetch.h>]], [[struct url *u = fetchParseURL("file:///"); ]])],[ol_cv_lib_fetch=yes],[ol_cv_lib_fetch=no])])
 LIBS=$ol_LIBS
 if test $ol_cv_lib_fetch != no ; then
-	ol_link_fetch="-lfetch -lcom_err"
+	ol_link_fetch="-lfetch"
 	AC_DEFINE(HAVE_FETCH,1,
 		[define if you actually have FreeBSD fetch(3)])
 fi

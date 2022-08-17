@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,10 @@ ber_get_option(
 
 		case LBER_OPT_LOG_PRINT_FILE:
 			*((FILE**)outvalue) = (FILE*)ber_pvt_err_file;
+			return LBER_OPT_SUCCESS;
+
+		case LBER_OPT_LOG_PRINT_FN:
+			*(BER_LOG_PRINT_FN *)outvalue = ber_pvt_log_print;
 			return LBER_OPT_SUCCESS;
 		}
 

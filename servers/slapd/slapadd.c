@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * Portions Copyright 1998-2003 Kurt D. Zeilenga.
  * Portions Copyright 2003 IBM Corporation.
  * All rights reserved.
@@ -16,7 +16,7 @@
  */
 /* ACKNOWLEDGEMENTS:
  * This work was initially developed by Kurt Zeilenga for inclusion
- * in OpenLDAP Software.  Additional signficant contributors include
+ * in OpenLDAP Software.  Additional significant contributors include
  *    Jong Hyuk Choi
  *    Pierangelo Masarati
  */
@@ -400,7 +400,7 @@ slapadd( int argc, char **argv )
 		SLAP_DBFLAGS(be) &= ~(SLAP_DBFLAG_NO_SCHEMA_CHECK);
 	}
 
-	if( !dryrun && be->be_entry_open( be, 1 ) != 0 ) {
+	if( be->be_entry_open && be->be_entry_open( be, 1 ) != 0 ) {
 		fprintf( stderr, "%s: could not open database.\n",
 			progname );
 		exit( EXIT_FAILURE );
@@ -442,7 +442,7 @@ slapadd( int argc, char **argv )
 			break;
 		}
 
-		if ( !dryrun ) {
+		if ( be->be_entry_put ) {
 			/*
 			 * Initialize text buffer
 			 */
@@ -504,7 +504,7 @@ slapadd( int argc, char **argv )
 
 	ch_free( buf );
 
-	if ( !dryrun ) {
+	if ( be->be_entry_close ) {
 		if ( enable_meter ) {
 			fprintf( stderr, "Closing DB..." );
 		}
