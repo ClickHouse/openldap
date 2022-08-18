@@ -1,12 +1,20 @@
+<<<<<<< HEAD
 A N N O U N C E M E N T -- OpenLDAP 2.6
 
     The OpenLDAP Project is pleased to announce the availability
     of OpenLDAP Software 2.6, a suite of the Lightweight Directory
+=======
+A N N O U N C E M E N T -- OpenLDAP 2.5
+
+    The OpenLDAP Project is pleased to announce the availability
+    of OpenLDAP Software 2.5, a suite of the Lightweight Directory
+>>>>>>> boringssl
     Access Protocol (v3) servers, clients, utilities, and
     development tools.
 
     This release contains the following major enhancements:
 
+<<<<<<< HEAD
         * Slapd(8) enhancements
             - Ability to log directly to a file bypassing syslog
         * Retired backends
@@ -19,11 +27,46 @@ A N N O U N C E M E N T -- OpenLDAP 2.6
             - Additional options to improve coherence with certain
               controls and extended operations
             - Ability to log directly to a file bypassing syslog
+=======
+General slapd bits:
+#define LDAP_COLLECTIVE_ATTRIBUTES
+#define LDAP_COMP_MATCH
+#define LDAP_SYNC_TIMESTAMP
+#define SLAP_CONTROL_X_WHATFAILED
+#define SLAP_CONFIG_DELETE
+#define SLAP_AUXPROP_DONTUSECOPY
+threadpool queues
+slapmodify
+non-blocking TLS
+gmtime_mutex
+LDAP_TCP_BUFFER
+Simplify write waiter handling
+
+back-ldap: FEATURE_CANCHAINOPS
+back-meta: SLAPD_META_CLIENT_PR
+overlays/syncprov: CHECK_CSN
+overlays/pcache: PCACHE_CONTROL_PRIVDB, PCACHE_EXOP_QUERY_DELETE, PCACHE_MONITOR
+
+ldap.h bits:
+#define LDAP_X_TXN                                             "1.3.6.1.4.1.4203.666.11.7" /* tmp */
+#define LDAP_EXOP_X_TXN_START                  LDAP_X_TXN ".1"
+#define LDAP_CONTROL_X_TXN_SPEC                        LDAP_X_TXN ".2"
+#define LDAP_EXOP_X_TXN_END                            LDAP_X_TXN ".3"
+#define LDAP_EXOP_X_TXN_ABORTED_NOTICE LDAP_X_TXN ".4"
+
+libldap
+channel binding support for OpenSSL, GnuTLS
+Elliptic Curve support for OpenSSL
+
+>>>>>>> boringssl
 
     This release includes the following major components:
 
         * slapd - a stand-alone LDAP directory server
+<<<<<<< HEAD
         * lloadd - a stand-alone LDAP load balancing proxy server
+=======
+>>>>>>> boringssl
         * -lldap - a LDAP client library
         * -llber - a lightweight BER/DER encoding/decoding library
         * LDIF tools - data conversion tools for use with slapd
@@ -65,7 +108,11 @@ SUPPORT
     The OpenLDAP Administrator's Guide, which includes quick
     start instructions, is available at:
 
-        https://www.openldap.org/doc/admin/
+        http://www.openldap.org/doc/admin/
+
+    The project maintains a FAQ which you may find useful:
+
+        http://www.openldap.org/faq/
 
     In addition, there are also a number of discussion lists
     related to OpenLDAP Software.  A list of mailing lists is

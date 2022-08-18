@@ -321,6 +321,13 @@ OL_ARG_ENABLE(meta, [AS_HELP_STRING([--enable-meta], [enable metadirectory backe
 	no, [no yes mod], ol_enable_backends)dnl
 OL_ARG_ENABLE(asyncmeta, [AS_HELP_STRING([--enable-asyncmeta], [enable asynchronous metadirectory backend])],
 	no, [no yes mod], ol_enable_backends)dnl
+<<<<<<< HEAD:configure.ac
+=======
+OL_ARG_ENABLE(monitor, [AS_HELP_STRING([--enable-monitor], [enable monitor backend])],
+	yes, [no yes mod], ol_enable_backends)dnl
+OL_ARG_ENABLE(ndb, [AS_HELP_STRING([--enable-ndb], [enable MySQL NDB Cluster backend])],
+	no, [no yes mod])dnl
+>>>>>>> boringssl:configure.in
 OL_ARG_ENABLE(null, [AS_HELP_STRING([--enable-null], [enable null backend])],
 	no, [no yes mod], ol_enable_backends)dnl
 OL_ARG_ENABLE(passwd, [AS_HELP_STRING([--enable-passwd], [enable passwd backend])],
