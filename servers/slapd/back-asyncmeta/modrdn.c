@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2020 The OpenLDAP Foundation.
+ * Copyright 2016-2022 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -360,7 +360,6 @@ retry:
 	mc->mc_conns[candidate].msc_active--;
 	asyncmeta_start_one_listener(mc, candidates, bc, candidate);
 	bc->bc_active--;
-	asyncmeta_memctx_toggle(thrctx);
 	ldap_pvt_thread_mutex_unlock( &mc->mc_om_mutex);
 	rs->sr_err = SLAPD_ASYNCOP;
 finish:

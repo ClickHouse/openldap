@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -227,6 +227,9 @@ parse_syslog_level( const char *arg, int *levelp )
 }
 #endif /* LDAP_DEBUG && LDAP_SYSLOG */
 
+static char **debug_unknowns;
+static char **syslog_unknowns;
+
 int
 parse_debug_unknowns( char **unknowns, int *levelp )
 {
@@ -303,6 +306,29 @@ parse_debug_level( const char *arg, int *levelp, char ***unknowns )
 	return 0;
 }
 
+void slap_check_unknown_level( char *levelstr, int level )
+{
+	int i;
+
+	if ( debug_unknowns ) {
+		for ( i = 0; debug_unknowns[ i ]; i++ ) {
+			if ( !strcasecmp( debug_unknowns[ i ], levelstr )) {
+				slap_debug |= level;
+				break;
+			}
+		}
+	}
+
+	if ( syslog_unknowns ) {
+		for ( i = 0; syslog_unknowns[ i ]; i++ ) {
+			if ( !strcasecmp( syslog_unknowns[ i ], levelstr )) {
+				ldap_syslog |= level;
+				break;
+			}
+		}
+	}
+}
+
 static void
 usage( char *name )
 {
@@ -310,7 +336,9 @@ usage( char *name )
 		"usage: %s options\n", name );
 	fprintf( stderr,
 		"\t-4\t\tIPv4 only\n"
+#ifdef LDAP_PF_INET6
 		"\t-6\t\tIPv6 only\n"
+#endif
 		"\t-T {acl|add|auth|cat|dn|index|modify|passwd|test}\n"
 		"\t\t\tRun in Tool mode\n"
 		"\t-c cookie\tSync cookie of consumer\n"
@@ -349,6 +377,29 @@ usage( char *name )
     );
 }
 
+typedef void (BER_logger)(const char *buf);
+static BER_logger *ber_logger;
+static void debug_print( const char *data )
+{
+	char buf[4136];	/* 4096 + 40 */
+#ifdef HAVE_CLOCK_GETTIME
+	struct timespec tv;
+#define	TS	"%08x"
+#define	Tfrac	tv.tv_nsec
+	clock_gettime( CLOCK_REALTIME, &tv );
+#else
+	struct timeval tv;
+#define	TS	"%05x"
+#define	Tfrac	tv.tv_usec
+	gettimeofday( &tv, NULL );
+#endif
+
+	buf[sizeof(buf)-1] = '\0';
+	snprintf( buf, sizeof(buf)-1, "%lx." TS " %p %s",
+		(long)tv.tv_sec, Tfrac, (void *)ldap_pvt_thread_self(), data );
+	ber_logger( buf );
+}
+
 #ifdef HAVE_NT_SERVICE_MANAGER
 void WINAPI ServiceMain( DWORD argc, LPTSTR *argv )
 #else
@@ -383,9 +434,6 @@ int main( int argc, char **argv )
 	struct sync_cookie *scp = NULL;
 	struct sync_cookie *scp_entry = NULL;
 
-	char **debug_unknowns = NULL;
-	char **syslog_unknowns = NULL;
-
 	char *serverNamePrefix = "";
 	size_t	l;
 
@@ -403,6 +451,20 @@ int main( int argc, char **argv )
 
 
 	(void) ldap_pvt_thread_initialize();
+
+#ifdef HAVE_TLS
+	rc = ldap_create( &slap_tls_ld );
+	if ( rc ) {
+		MAIN_RETURN( rc );
+	}
+	/* Library defaults to full certificate checking. This is correct when
+	 * a client is verifying a server because all servers should have a
+	 * valid cert. But few clients have valid certs, so we want our default
+	 * to be no checking. The config file can override this as usual.
+	 */
+	rc = LDAP_OPT_X_TLS_NEVER;
+	(void) ldap_pvt_tls_set_option( slap_tls_ld, LDAP_OPT_X_TLS_REQUIRE_CERT, &rc );
+#endif
 
 	serverName = lutil_progname( "slapd", argc, argv );
 
@@ -483,10 +545,10 @@ int main( int argc, char **argv )
 #endif
 			     )) != EOF ) {
 		switch ( i ) {
-#ifdef LDAP_PF_INET6
 		case '4':
 			slap_inet4or6 = AF_INET;
 			break;
+#ifdef LDAP_PF_INET6
 		case '6':
 			slap_inet4or6 = AF_INET6;
 			break;
@@ -694,6 +756,8 @@ unhandled_option:;
 	if ( optind != argc )
 		goto unhandled_option;
 
+	ber_get_option(NULL, LBER_OPT_LOG_PRINT_FN, &ber_logger);
+	ber_set_option(NULL, LBER_OPT_LOG_PRINT_FN, debug_print);
 	ber_set_option(NULL, LBER_OPT_DEBUG_LEVEL, &slap_debug);
 	ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, &slap_debug);
 	ldif_debug = slap_debug;
@@ -779,21 +843,6 @@ unhandled_option:;
 	extops_init();
 	lutil_passwd_init();
 
-#ifdef HAVE_TLS
-	rc = ldap_create( &slap_tls_ld );
-	if ( rc ) {
-		SERVICE_EXIT( ERROR_SERVICE_SPECIFIC_ERROR, 20 );
-		goto destroy;
-	}
-	/* Library defaults to full certificate checking. This is correct when
-	 * a client is verifying a server because all servers should have a
-	 * valid cert. But few clients have valid certs, so we want our default
-	 * to be no checking. The config file can override this as usual.
-	 */
-	rc = LDAP_OPT_X_TLS_NEVER;
-	(void) ldap_pvt_tls_set_option( slap_tls_ld, LDAP_OPT_X_TLS_REQUIRE_CERT, &rc );
-#endif
-
 	rc = slap_init( serverMode, serverName );
 	if ( rc ) {
 		SERVICE_EXIT( ERROR_SERVICE_SPECIFIC_ERROR, 18 );
@@ -817,6 +866,8 @@ unhandled_option:;
 		debug_unknowns = NULL;
 		if ( rc )
 			goto destroy;
+		ber_set_option( NULL, LBER_OPT_DEBUG_LEVEL, &slap_debug );
+		ldap_set_option( NULL, LDAP_OPT_DEBUG_LEVEL, &slap_debug );
 	}
 	if ( syslog_unknowns ) {
 		rc = parse_debug_unknowns( syslog_unknowns, &ldap_syslog );
@@ -856,7 +907,7 @@ unhandled_option:;
 	}
 
 #ifdef HAVE_TLS
-	rc = ldap_pvt_tls_init();
+	rc = ldap_pvt_tls_init( 1 );
 	if( rc != 0) {
 		Debug( LDAP_DEBUG_ANY,
 		    "main: TLS init failed: %d\n",
@@ -1103,7 +1154,7 @@ stop:
 		ch_free( global_host );
 
 	/* kludge, get symbols referenced */
-	tavl_free( NULL, NULL );
+	ldap_tavl_free( NULL, NULL );
 
 #ifdef CSRIMALLOC
 	mal_dumpleaktrace( leakfile );

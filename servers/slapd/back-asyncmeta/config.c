@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2020 The OpenLDAP Foundation.
+ * Copyright 2016-2022 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -29,7 +29,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 #include "ldif.h"
 #include "../back-ldap/back-ldap.h"
@@ -93,6 +93,7 @@ enum {
 	LDAP_BACK_CFG_SUBTREE_IN,
 	LDAP_BACK_CFG_KEEPALIVE,
 	LDAP_BACK_CFG_FILTER,
+	LDAP_BACK_CFG_TCP_USER_TIMEOUT,
 	LDAP_BACK_CFG_LAST
 };
 
@@ -341,6 +342,15 @@ static ConfigTable a_metacfg[] = {
 			"SINGLE-VALUE )",
 		NULL, NULL },
 
+	{ "tcp-user-timeout", "milliseconds", 2, 2, 0,
+		ARG_MAGIC|ARG_UINT|LDAP_BACK_CFG_TCP_USER_TIMEOUT,
+		asyncmeta_back_cf_gen, "( OLcfgDbAt:3.30 "
+			"NAME 'olcDbTcpUserTimeout' "
+			"DESC 'TCP User Timeout' "
+			"SYNTAX OMsInteger "
+			"SINGLE-VALUE )",
+		NULL, NULL },
+
 	{ "filter", "pattern", 2, 2, 0,
 		ARG_MAGIC|LDAP_BACK_CFG_FILTER,
 		asyncmeta_back_cf_gen, "( OLcfgDbAt:3.112 "
@@ -434,6 +444,7 @@ static ConfigOCs a_metaocs[] = {
 			"$ olcDbTimeout "
 			"$ olcDbKeepalive "
 			"$ olcDbFilter "
+			"$ olcDbTcpUserTimeout "
 
 			/* defaults may be inherited */
 			COMMON_ATTRS
@@ -1166,7 +1177,7 @@ asyncmeta_back_cf_gen( ConfigArgs *c )
 
 		case LDAP_BACK_CFG_TIMEOUT:
 			for ( i = 0; i < SLAP_OP_LAST; i++ ) {
-				if ( mc->mc_timeout[ i ] != 0 ) {
+				if ( mc->mc_timeout[ i ] != META_BACK_CFG_DEFAULT_OPS_TIMEOUT ) {
 					break;
 				}
 			}
@@ -1500,6 +1511,10 @@ asyncmeta_back_cf_gen( ConfigArgs *c )
 				break;
 			}
 
+		case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
+			c->value_uint = mt->mt_tls.sb_tcp_user_timeout;
+			break;
+
 		default:
 			rc = 1;
 		}
@@ -1725,6 +1740,10 @@ asyncmeta_back_cf_gen( ConfigArgs *c )
 			mt->mt_tls.sb_keepalive.sk_idle = 0;
 			mt->mt_tls.sb_keepalive.sk_probes = 0;
 			mt->mt_tls.sb_keepalive.sk_interval = 0;
+			break;
+
+		case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
+			mt->mt_tls.sb_tcp_user_timeout = 0;
 			break;
 
 		default:
@@ -2386,9 +2405,15 @@ asyncmeta_back_cf_gen( ConfigArgs *c )
 		break;
 #endif /* SLAPD_META_CLIENT_PR */
 
-	case LDAP_BACK_CFG_KEEPALIVE:
-		slap_keepalive_parse( ber_bvstrdup(c->argv[1]),
-				 &mt->mt_tls.sb_keepalive, 0, 0, 0);
+	case LDAP_BACK_CFG_KEEPALIVE: {
+		struct berval bv;
+		ber_str2bv( c->argv[1], 0, 1, &bv );
+		slap_keepalive_parse( &bv, &mt->mt_tls.sb_keepalive, 0, 0, 0 );
+		}
+		break;
+
+	case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
+		mt->mt_tls.sb_tcp_user_timeout = c->value_uint;
 		break;
 
 	/* anything else */

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2004-2020 The OpenLDAP Foundation.
+ * Copyright 2004-2022 The OpenLDAP Foundation.
  * Portions Copyright 2004-2005 by Howard Chu, Symas Corp.
  * All rights reserved.
  *
@@ -32,7 +32,7 @@
 #include <ac/errno.h>
 #include <ac/string.h>
 
-#include "config.h"
+#include "slap-config.h"
 
 #ifdef DO_KRB5
 #include <lber.h>
@@ -289,7 +289,7 @@ static int k5key_chk(
 			struct lutil_tm tm;
 			struct lutil_timet tt;
 			if ( lutil_parsetime( a->a_vals[0].bv_val, &tm ) == 0 &&
-				lutil_tm2time( &tm, &tt ) == 0 && tt.tt_usec < op->o_time ) {
+				lutil_tm2time( &tm, &tt ) == 0 && tt.tt_sec < op->o_time ) {
 				/* Account is expired */
 				rc = LUTIL_PASSWD_ERR;
 				break;

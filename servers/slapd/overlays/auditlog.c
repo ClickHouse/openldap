@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2020 The OpenLDAP Foundation.
+ * Copyright 2005-2022 The OpenLDAP Foundation.
  * Portions copyright 2004-2005 Symas Corporation.
  * All rights reserved.
  *
@@ -29,7 +29,7 @@
 #include <ac/ctype.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "ldif.h"
 
 typedef struct auditlog_data {

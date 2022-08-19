@@ -1,7 +1,7 @@
 # $OpenLDAP$
 ## This work is part of OpenLDAP Software <http://www.openldap.org/>.
 ##
-## Copyright 1998-2020 The OpenLDAP Foundation.
+## Copyright 1998-2022 The OpenLDAP Foundation.
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,7 @@ sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 sysconfdir = @sysconfdir@$(ldap_subdir)
 schemadir = $(sysconfdir)/schema
+systemdsystemunitdir = @systemdsystemunitdir@
 
 PLAT = @PLAT@
 EXEEXT = @EXEEXT@
@@ -104,6 +105,9 @@ LTFLAGS_MOD = $(@PLAT@_LTFLAGS_MOD)
 # LINK_LIBS referenced in library and module link commands.
 LINK_LIBS = $(MOD_LIBS) $(@PLAT@_LINK_LIBS)
 
+# compiler options for versioned library symbol support
+OL_VERSIONED_SYMBOLS = @OL_VERSIONED_SYMBOLS@
+
 LTSTATIC = @LTSTATIC@
 
 LTLINK   = $(LIBTOOL) --mode=link \
@@ -113,7 +117,7 @@ LTCOMPILE_LIB = $(LIBTOOL) $(LTONLY_LIB) --mode=compile \
 	$(CC) $(LT_CFLAGS) $(LT_CPPFLAGS) $(LIB_DEFS) -c
 
 LTLINK_LIB = $(LIBTOOL) $(LTONLY_LIB) --mode=link \
-	$(CC) $(LT_CFLAGS) $(LDFLAGS) $(LTFLAGS_LIB)
+	$(CC) $(LT_CFLAGS) $(LDFLAGS) $(LTFLAGS_LIB) $(SYMBOL_VERSION_FLAGS)
 
 LTCOMPILE_MOD = $(LIBTOOL) $(LTONLY_MOD) --mode=compile \
 	$(CC) $(LT_CFLAGS) $(LT_CPPFLAGS) $(MOD_DEFS) -c
@@ -164,6 +168,8 @@ LTHREAD_LIBS = @LTHREAD_LIBS@
 SLAPD_NDB_LIBS = @SLAPD_NDB_LIBS@
 WT_LIBS = @WT_LIBS@
 
+LEVENT_LIBS = @LEVENT_LIBS@
+
 LDAP_LIBLBER_LA = $(LDAP_LIBDIR)/liblber/liblber.la
 LDAP_LIBLDAP_LA = $(LDAP_LIBDIR)/libldap/libldap.la
 
@@ -175,6 +181,8 @@ LDAP_L = $(LDAP_LIBLUTIL_A) \
 	$(LDAP_LIBLDAP_LA) $(LDAP_LIBLBER_LA)
 SLAPD_L = $(LDAP_LIBLUNICODE_A) $(LDAP_LIBREWRITE_A) \
 	$(LDAP_LIBLUTIL_A) $(LDAP_LIBLDAP_LA) $(LDAP_LIBLBER_LA)
+LLOADD_L = $(LDAP_LIBLUTIL_A) $(LDAP_LIBLDAP_LA) \
+	$(LDAP_LIBLBER_LA)
 
 WRAP_LIBS = @WRAP_LIBS@
 # AutoConfig generated 
@@ -184,13 +192,12 @@ AC_DEFS = @CPPFLAGS@ # @DEFS@
 AC_LDFLAGS = @LDFLAGS@
 AC_LIBS = @LIBS@
 
-KRB4_LIBS = @KRB4_LIBS@
-KRB5_LIBS = @KRB5_LIBS@
-KRB_LIBS = @KRB4_LIBS@ @KRB5_LIBS@
 SASL_LIBS = @SASL_LIBS@
 TLS_LIBS = @TLS_LIBS@
 AUTH_LIBS = @AUTH_LIBS@
-SECURITY_LIBS = $(SASL_LIBS) $(KRB_LIBS) $(TLS_LIBS) $(AUTH_LIBS)
+ARGON2_LIBS = @ARGON2_LIBS@
+SECURITY_LIBS = $(SASL_LIBS) $(TLS_LIBS) $(AUTH_LIBS)
+SYSTEMD_LIBS = @SYSTEMD_LIBS@
 
 MODULES_CPPFLAGS = @SLAPD_MODULES_CPPFLAGS@
 MODULES_LDFLAGS = @SLAPD_MODULES_LDFLAGS@
@@ -201,7 +208,8 @@ SLAPD_SQL_LDFLAGS = @SLAPD_SQL_LDFLAGS@
 SLAPD_SQL_INCLUDES = @SLAPD_SQL_INCLUDES@
 SLAPD_SQL_LIBS = @SLAPD_SQL_LIBS@
 
-SLAPD_LIBS = @SLAPD_LIBS@ @SLAPD_PERL_LDFLAGS@ @SLAPD_SQL_LDFLAGS@ @SLAPD_SQL_LIBS@ @SLAPD_SLP_LIBS@ @SLAPD_GMP_LIBS@
+SLAPD_LIBS = @SLAPD_LIBS@ @SLAPD_PERL_LDFLAGS@ @SLAPD_SQL_LDFLAGS@ @SLAPD_SQL_LIBS@ @SLAPD_SLP_LIBS@ @SLAPD_GMP_LIBS@ $(SYSTEMD_LIBS)
+LLOADD_LIBS = @BALANCER_LIBS@ $(LEVENT_LIBS)
 
 # Our Defaults
 CC = $(AC_CC)

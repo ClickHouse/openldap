@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2007-2020 The OpenLDAP Foundation.
+ * Copyright 2007-2022 The OpenLDAP Foundation.
  * Portions Copyright 2007 Michał Szulczyński.
  * Portions Copyright 2009 Howard Chu.
  * All rights reserved.
@@ -31,7 +31,7 @@
 #include <ac/string.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 
 #ifndef SLAPD_MEMBEROF_ATTR
@@ -849,7 +849,7 @@ done:
 
 /*
 ** When adding a group, we first strip any existing members,
-** and add all which match the filters ourselfs.
+** and add all which match the filters ourselves.
 */
 static int
 autogroup_add_entry( Operation *op, SlapReply *rs)
@@ -1385,7 +1385,7 @@ autogroup_response( Operation *op, SlapReply *rs )
 
 			/* When modifying any of the attributes of an entry, we must
 			   check if the entry is in any of our groups, and if
-			   the modified entry maches any of the filters of that group.
+			   the modified entry matches any of the filters of that group.
 
 			   If the entry exists in a group, but the modified attributes do
 				not match any of the group's filters, we delete the entry from that group.
@@ -1970,7 +1970,7 @@ ag_cfgen( ConfigArgs *c )
 			}
 		}
 
-		if ( c->valx > 0 ) {
+		if ( c->valx >= 0 ) {
 			int	i;
 
 			for ( i = 0, agdp = &agi->agi_def ;
@@ -2072,7 +2072,7 @@ autogroup_db_open(
 		return 0;
 	}
 
-	connection_fake_init( &conn, &opbuf, thrctx );
+	connection_fake_init2( &conn, &opbuf, thrctx, 0 );
 	op = &opbuf.ob_op;
 
 	op->ors_attrsonly = 0;

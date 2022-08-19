@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2020 The OpenLDAP Foundation.
+ * Copyright 1999-2022 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * Portions Copyright 1999-2003 Howard Chu.
  * All rights reserved.
@@ -29,7 +29,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "config.h"
+#include "slap-config.h"
 #include "lutil.h"
 #include "ldif.h"
 #include "../back-ldap/back-ldap.h"
@@ -101,6 +101,7 @@ enum {
 	LDAP_BACK_CFG_PSEUDOROOTDN,
 	LDAP_BACK_CFG_PSEUDOROOTPW,
 	LDAP_BACK_CFG_KEEPALIVE,
+	LDAP_BACK_CFG_TCP_USER_TIMEOUT,
 	LDAP_BACK_CFG_FILTER,
 
 	LDAP_BACK_CFG_LAST
@@ -377,10 +378,10 @@ static ConfigTable metacfg[] = {
 		ARG_MAGIC|ARG_ON_OFF|LDAP_BACK_CFG_PSEUDOROOT_BIND_DEFER,
 		meta_back_cf_gen, NULL, NULL, NULL },
 	{ "pseudorootdn", "dn", 2, 2, 0,
-		ARG_MAGIC|ARG_DN|LDAP_BACK_CFG_PSEUDOROOTDN,
+		ARG_MAGIC|ARG_DN|ARG_QUOTE|LDAP_BACK_CFG_PSEUDOROOTDN,
 		meta_back_cf_gen, NULL, NULL, NULL },
 	{ "pseudorootpw", "password", 2, 2, 0,
-		ARG_MAGIC|ARG_STRING|LDAP_BACK_CFG_PSEUDOROOTDN,
+		ARG_MAGIC|ARG_STRING|LDAP_BACK_CFG_PSEUDOROOTPW,
 		meta_back_cf_gen, NULL, NULL, NULL },
 	{ "nretries", "NEVER|forever|<number>", 2, 2, 0,
 		ARG_MAGIC|LDAP_BACK_CFG_NRETRIES,
@@ -417,6 +418,15 @@ static ConfigTable metacfg[] = {
 			"SYNTAX OMsDirectoryString "
 			"SINGLE-VALUE )",
 		NULL, NULL },
+
+	{ "tcp-user-timeout", "milliseconds", 2, 2, 0,
+               ARG_MAGIC|ARG_UINT|LDAP_BACK_CFG_TCP_USER_TIMEOUT,
+               meta_back_cf_gen, "( OLcfgDbAt:3.30 "
+                       "NAME 'olcDbTcpUserTimeout' "
+                       "DESC 'TCP User Timeout' "
+                       "SYNTAX OMsInteger "
+                       "SINGLE-VALUE )",
+               NULL, NULL },
 
 	{ "filter", "pattern", 2, 2, 0,
 		ARG_MAGIC|LDAP_BACK_CFG_FILTER,
@@ -485,6 +495,7 @@ static ConfigOCs metaocs[] = {
 			"$ olcDbSubtreeInclude "
 			"$ olcDbTimeout "
 			"$ olcDbKeepalive "
+			"$ olcDbTcpUserTimeout "
 			"$ olcDbFilter "
 
 			/* defaults may be inherited */
@@ -1605,6 +1616,11 @@ meta_back_cf_gen( ConfigArgs *c )
 				break;
 			}
 
+		case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
+			c->value_uint = mt->mt_tls.sb_tcp_user_timeout;
+			break;
+
+
 		default:
 			rc = 1;
 		}
@@ -1893,6 +1909,10 @@ meta_back_cf_gen( ConfigArgs *c )
 			mt->mt_tls.sb_keepalive.sk_idle = 0;
 			mt->mt_tls.sb_keepalive.sk_probes = 0;
 			mt->mt_tls.sb_keepalive.sk_interval = 0;
+			break;
+
+		case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
+			mt->mt_tls.sb_tcp_user_timeout = 0;
 			break;
 
 		default:
@@ -2642,7 +2662,6 @@ idassert-authzFrom	"dn:<rootdn>"
 						c->fname, c->lineno, ca.argc, ca.argv );
 				}
 				assert( rc == 0 );
-				ch_free( ca.argv );
 				ch_free( ca.tline );
 			}
 		}
@@ -2679,9 +2698,9 @@ idassert-authzFrom	"dn:<rootdn>"
 						c->fname, c->lineno, ca.argc, argv );
 				}
 				assert( rc == 0 );
-				ch_free( ca.argv );
 				ch_free( ca.tline );
 			}
+			ch_free( ca.argv );
 		}
 
 		/* save the rule info */
@@ -2698,7 +2717,7 @@ idassert-authzFrom	"dn:<rootdn>"
 			/* move it to the right slot */
 			if ( ix < cnt ) {
 				for ( i=cnt; i>ix; i-- )
-					mt->mt_rwmap.rwm_bva_rewrite[i+1] = mt->mt_rwmap.rwm_bva_rewrite[i];
+					mt->mt_rwmap.rwm_bva_rewrite[i] = mt->mt_rwmap.rwm_bva_rewrite[i-1];
 				mt->mt_rwmap.rwm_bva_rewrite[i] = bv;
 
 				/* destroy old rules */
@@ -2710,7 +2729,7 @@ idassert-authzFrom	"dn:<rootdn>"
 	case LDAP_BACK_CFG_MAP: {
 	/* objectclass/attribute mapping */
 		ConfigArgs ca = { 0 };
-		char *argv[5];
+		char *argv[5], **argvp;
 		struct ldapmap rwm_oc;
 		struct ldapmap rwm_at;
 		int cnt = 0, ix = c->valx;
@@ -2743,7 +2762,8 @@ idassert-authzFrom	"dn:<rootdn>"
 				argv[2] = ca.argv[1];
 				argv[3] = ca.argv[2];
 				argv[4] = ca.argv[3];
-				ch_free( ca.argv );
+
+				argvp = ca.argv;
 				ca.argv = argv;
 				ca.argc++;
 				rc = ldap_back_map_config( &ca, &mt->mt_rwmap.rwm_oc,
@@ -2751,7 +2771,7 @@ idassert-authzFrom	"dn:<rootdn>"
 
 				ch_free( ca.tline );
 				ca.tline = NULL;
-				ca.argv = NULL;
+				ca.argv = argvp;
 
 				/* in case of failure, restore
 				 * the existing mapping */
@@ -2768,7 +2788,7 @@ idassert-authzFrom	"dn:<rootdn>"
 		}
 
 		if ( ix < cnt ) {
-			for ( ; i<cnt ; cnt++ ) {
+			for ( ; i<cnt ; i++ ) {
 				ca.line = mt->mt_rwmap.rwm_bva_map[ i ].bv_val;
 				ca.argc = 0;
 				config_fp_parse_line( &ca );
@@ -2778,7 +2798,7 @@ idassert-authzFrom	"dn:<rootdn>"
 				argv[3] = ca.argv[2];
 				argv[4] = ca.argv[3];
 
-				ch_free( ca.argv );
+				argvp = ca.argv;
 				ca.argv = argv;
 				ca.argc++;
 				rc = ldap_back_map_config( &ca, &mt->mt_rwmap.rwm_oc,
@@ -2786,7 +2806,7 @@ idassert-authzFrom	"dn:<rootdn>"
 
 				ch_free( ca.tline );
 				ca.tline = NULL;
-				ca.argv = NULL;
+				ca.argv = argvp;
 
 				/* in case of failure, restore
 				 * the existing mapping */
@@ -2794,6 +2814,7 @@ idassert-authzFrom	"dn:<rootdn>"
 					goto map_fail;
 				}
 			}
+			ch_free( ca.argv );
 		}
 
 		/* save the map info */
@@ -2805,7 +2826,7 @@ idassert-authzFrom	"dn:<rootdn>"
 			/* move it to the right slot */
 			if ( ix < cnt ) {
 				for ( i=cnt; i>ix; i-- )
-					mt->mt_rwmap.rwm_bva_map[i+1] = mt->mt_rwmap.rwm_bva_map[i];
+					mt->mt_rwmap.rwm_bva_map[i] = mt->mt_rwmap.rwm_bva_map[i-1];
 				mt->mt_rwmap.rwm_bva_map[i] = bv;
 
 				/* destroy old mapping */
@@ -2821,6 +2842,7 @@ map_fail:;
 			meta_back_map_free( &mt->mt_rwmap.rwm_at );
 			mt->mt_rwmap.rwm_oc = rwm_oc;
 			mt->mt_rwmap.rwm_at = rwm_at;
+			ch_free( ca.argv );
 		}
 		} break;
 
@@ -2893,9 +2915,15 @@ map_fail:;
 		break;
 #endif /* SLAPD_META_CLIENT_PR */
 
-	case LDAP_BACK_CFG_KEEPALIVE:
-		slap_keepalive_parse( ber_bvstrdup(c->argv[1]),
-				 &mt->mt_tls.sb_keepalive, 0, 0, 0);
+	case LDAP_BACK_CFG_KEEPALIVE: {
+		struct berval bv;
+		ber_str2bv( c->argv[ 1 ], 0, 1, &bv );
+		slap_keepalive_parse( &bv, &mt->mt_tls.sb_keepalive, 0, 0, 0 );
+		}
+		break;
+
+	case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
+		mt->mt_tls.sb_tcp_user_timeout = c->value_uint;
 		break;
 
 	/* anything else */
@@ -3073,8 +3101,8 @@ ldap_back_map_config(
 		}
 	}
 
-	if ( (src[ 0 ] != '\0' && avl_find( map->map, (caddr_t)&mapping[ 0 ], mapping_cmp ) != NULL)
-			|| avl_find( map->remap, (caddr_t)&mapping[ 1 ], mapping_cmp ) != NULL)
+	if ( (src[ 0 ] != '\0' && ldap_avl_find( map->map, (caddr_t)&mapping[ 0 ], mapping_cmp ) != NULL)
+			|| ldap_avl_find( map->remap, (caddr_t)&mapping[ 1 ], mapping_cmp ) != NULL)
 	{
 		snprintf( c->cr_msg, sizeof( c->cr_msg ),
 			"duplicate mapping found." );
@@ -3083,10 +3111,10 @@ ldap_back_map_config(
 	}
 
 	if ( src[ 0 ] != '\0' ) {
-		avl_insert( &map->map, (caddr_t)&mapping[ 0 ],
+		ldap_avl_insert( &map->map, (caddr_t)&mapping[ 0 ],
 					mapping_cmp, mapping_dup );
 	}
-	avl_insert( &map->remap, (caddr_t)&mapping[ 1 ],
+	ldap_avl_insert( &map->remap, (caddr_t)&mapping[ 1 ],
 				mapping_cmp, mapping_dup );
 
 success_return:;

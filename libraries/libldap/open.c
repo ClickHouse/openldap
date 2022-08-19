@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -179,6 +179,9 @@ ldap_create( LDAP **ldp )
 	ld->ld_options.ldo_defludp = NULL;
 	ld->ld_options.ldo_conn_cbs = NULL;
 
+	ld->ld_options.ldo_defbase = gopts->ldo_defbase
+		? LDAP_STRDUP( gopts->ldo_defbase ) : NULL;
+
 #ifdef HAVE_CYRUS_SASL
 	ld->ld_options.ldo_def_sasl_mech = gopts->ldo_def_sasl_mech
 		? LDAP_STRDUP( gopts->ldo_def_sasl_mech ) : NULL;
@@ -206,6 +209,14 @@ ldap_create( LDAP **ldp )
 	}
 
 	if (( ld->ld_selectinfo = ldap_new_select_info()) == NULL ) goto nomem;
+
+	ld->ld_options.ldo_local_ip_addrs.local_ip_addrs = NULL;
+	if( gopts->ldo_local_ip_addrs.local_ip_addrs ) {
+		ld->ld_options.ldo_local_ip_addrs.local_ip_addrs =
+			LDAP_STRDUP( gopts->ldo_local_ip_addrs.local_ip_addrs );
+		if ( ld->ld_options.ldo_local_ip_addrs.local_ip_addrs == NULL )
+			goto nomem;
+	}
 
 	ld->ld_lberoptions = LBER_USE_DER;
 
@@ -339,6 +350,7 @@ ldap_init_fd(
 	/* Attach the passed socket as the LDAP's connection */
 	conn = ldap_new_connection( ld, NULL, 1, 0, NULL, 0, 0 );
 	if( conn == NULL ) {
+		LDAP_MUTEX_UNLOCK( &ld->ld_conn_mutex );
 		ldap_unbind_ext( ld, NULL, NULL );
 		return( LDAP_NO_MEMORY );
 	}
@@ -566,7 +578,8 @@ ldap_open_internal_connection( LDAP **ldp, ber_socket_t *fdp )
 	lr->lr_status = LDAP_REQST_INPROGRESS;
 	lr->lr_res_errno = LDAP_SUCCESS;
 	/* no mutex lock needed, we just created this ld here */
-	ld->ld_requests = lr;
+	rc = ldap_tavl_insert( &ld->ld_requests, lr, ldap_req_cmp, ldap_avl_dup_error );
+	assert( rc == LDAP_SUCCESS );
 
 	LDAP_MUTEX_LOCK( &ld->ld_conn_mutex );
 	/* Attach the passed socket as the *LDAP's connection */

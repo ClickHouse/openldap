@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2020 The OpenLDAP Foundation.
+ * Copyright 1999-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 
+#include "ac/signal.h"
 #include "ac/stdlib.h"
 #include "ac/time.h"
 
@@ -197,7 +198,6 @@ void display()
 {
 	int i, j;
 	struct timeval now;
-	struct tm *tm;
 	time_t now_t;
 
 	gettimeofday(&now, NULL);
@@ -338,7 +338,7 @@ void get_counters(
 	BerElement *ber,
 	counters *c )
 {
-	int i, rc;
+	int rc;
 	slap_op_t op = SLAP_OP_BIND;
 	struct berval dn, bv, *bvals, **bvp = &bvals;
 
@@ -425,7 +425,7 @@ void get_csns(
 		if (j < numservers) {
 			ber_bvreplace( &c->vals[j], &bvs[i] );
 			lutil_parsetime(bvs[i].bv_val, &tm);
-			c->tvs[j].tv_usec = tm.tm_usec;
+			c->tvs[j].tv_usec = tm.tm_nsec / 1000;
 			lutil_tm2time( &tm, &tt );
 			c->tvs[j].tv_sec = tt.tt_sec;
 		}
@@ -559,6 +559,7 @@ setup_server( struct tester_conn_args *config, server *sv, int first )
 	}
 	if ( first )
 		rotate_stats( sv );
+	return 0;
 }
 
 int
@@ -597,7 +598,9 @@ main( int argc, char **argv )
 	}
 
 	tester_config_finish( config );
-	signal(SIGPIPE, SIG_IGN);
+#ifdef SIGPIPE
+	(void) SIGNAL(SIGPIPE, SIG_IGN);
+#endif
 
 	/* don't clear the screen if debug is enabled */
 	if (debug)
@@ -701,7 +704,7 @@ server_down1:
 							goto server_down1;
 					}
 				}
-				if ( rc != -1 );
+				if ( rc != -1 )
 					gettimeofday( &servers[i].c_curr.time, 0 );
 			}
 		}

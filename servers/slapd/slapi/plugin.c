@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2020 The OpenLDAP Foundation.
+ * Copyright 2002-2022 The OpenLDAP Foundation.
  * Portions Copyright 1997,2002-2003 IBM Corporation.
  * All rights reserved.
  *
@@ -21,15 +21,18 @@
  */
 
 #include "portable.h"
-#include "ldap_pvt_thread.h"
-#include "slap.h"
-#include "config.h"
-#include "slapi.h"
-#include "lutil.h"
 
 /*
  * Note: if ltdl.h is not available, slapi should not be compiled
  */
+
+#ifdef HAVE_LTDL_H
+#include "ldap_pvt_thread.h"
+#include "slap.h"
+#include "slap-config.h"
+#include "slapi.h"
+#include "lutil.h"
+
 #include <ltdl.h>
 
 static int slapi_int_load_plugin( Slapi_PBlock *, const char *, const char *, int, 
@@ -48,7 +51,7 @@ static ExtendedOp *pGExtendedOps = NULL;
  * Input:              type - type of the plugin, such as SASL, database, etc.
  *                     path - the loadpath to load the module in
  *                     initfunc - name of the plugin function to execute first
- *                     argc - number of arguements
+ *                     argc - number of arguments
  *                     argv[] - an array of char pointers point to
  *                              the arguments passed in via
  *                              the configuration file.
@@ -214,6 +217,7 @@ slapi_int_get_plugins(
 	int		rc = LDAP_SUCCESS;
 
 	assert( ppFuncPtrs != NULL );
+	*ppFuncPtrs = NULL;
 
 	if ( be == NULL ) {
 		goto done;
@@ -233,7 +237,6 @@ slapi_int_get_plugins(
 	}
 
 	if ( numPB == 0 ) {
-		*ppFuncPtrs = NULL;
 		rc = LDAP_SUCCESS;
 		goto done;
 	}
@@ -827,4 +830,4 @@ slapi_int_plugin_unparse(
 		ber_bvarray_add( out, &bv );
 	}
 }
-
+#endif /* HAVE_LTDL_H */

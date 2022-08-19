@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2020 The OpenLDAP Foundation.
+ * Copyright 2016-2022 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -326,13 +326,15 @@ typedef struct a_metatarget_t {
 #define	META_BACK_TGT_NOREFS(mt)		META_BACK_TGT_ISSET( (mt), LDAP_BACK_F_NOREFS )
 #define	META_BACK_TGT_NOUNDEFFILTER(mt)		META_BACK_TGT_ISSET( (mt), LDAP_BACK_F_NOUNDEFFILTER )
 
-#define META_BACK_CFG_MAX_PENDING_OPS          0x80
-#define META_BACK_CFG_MAX_TARGET_CONNS          0xFF
+#define META_BACK_CFG_MAX_PENDING_OPS		0x80
+#define META_BACK_CFG_MAX_TARGET_CONNS		0xFF
+#define META_BACK_CFG_DEFAULT_OPS_TIMEOUT	0x02
+
 /* the interval of the timeout checking loop in microseconds
  * possibly make this configurable? */
-#define META_BACK_CFG_MAX_TIMEOUT_LOOP          0x70000
+#define META_BACK_CFG_MAX_TIMEOUT_LOOP		0x70000
 	slap_mask_t		mt_rep_flags;
-	int                     mt_timeout_ops;
+	int			mt_timeout_ops;
 } a_metatarget_t;
 
 typedef struct a_metadncache_t {
@@ -590,6 +592,7 @@ extern LDAP_URLLIST_PROC	asyncmeta_back_default_urllist;
 #define	META_MSGID_NEED_BIND	(-2)
 #define	META_MSGID_CONNECTING	(-3)
 #define META_MSGID_UNDEFINED    (-4)
+#define META_MSGID_GOT_BIND     (-5)
 
 typedef enum meta_search_candidate_t {
 	META_SEARCH_UNDEFINED = -2,
@@ -610,8 +613,6 @@ void asyncmeta_drop_bc_from_fconn(bm_context_t *bc);
 
 bm_context_t *
 asyncmeta_find_message(ber_int_t msgid, a_metaconn_t *mc, int candidate);
-
-void asyncmeta_memctx_toggle(void *thrctx);
 
 void* asyncmeta_op_handle_result(void *ctx, void *arg);
 int asyncmeta_back_cleanup( Operation *op, SlapReply *rs, bm_context_t *bm );

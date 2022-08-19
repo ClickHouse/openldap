@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,7 @@ int lutil_tm2time( struct lutil_tm *tm, struct lutil_timet *tt )
 		273, 304, 334 };
 	int sec;
 
-	tt->tt_usec = tm->tm_usec;
+	tt->tt_nsec = tm->tm_nsec;
 
 	/* special case 0000/01/01+00:00:00 is returned as zero */
 	if ( tm->tm_year == -1900 && tm->tm_mon == 0 && tm->tm_mday == 1 &&
@@ -226,7 +226,7 @@ int lutil_tm2gtime( struct lutil_tm *tm, struct lutil_timet *tt )
 	int sec, year;
 	long tmp;
 
-	tt->tt_usec = tm->tm_usec;
+	tt->tt_nsec = tm->tm_nsec;
 
 	/* tm->tm_year is years since 1900 */
 	/* calculate days from 0000 */
@@ -350,13 +350,13 @@ int lutil_parsetime( char *atm, struct lutil_tm *tm )
 				i*=10; i+= *ptr++ - '0';
 				fracs++;
 			}
-			tm->tm_usec = i;
+			tm->tm_nsec = i;
 			if (i) {
-				for (i = fracs; i<6; i++)
-					tm->tm_usec *= 10;
+				for (i = fracs; i<9; i++)
+					tm->tm_nsec *= 10;
 			}
 		} else {
-			tm->tm_usec = 0;
+			tm->tm_nsec = 0;
 		}
 		tm->tm_usub = 0;
 
@@ -1069,4 +1069,3 @@ lutil_snprintf( char *buf, ber_len_t bufsize, char **next, ber_len_t *len, LDAP_
 
 	return 0;
 }
-

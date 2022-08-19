@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2008-2020 The OpenLDAP Foundation.
+ * Copyright 2008-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1176,7 +1176,7 @@ static Sockbuf_IO tlsg_sbio =
 	tlsg_sb_close		/* sbi_close */
 };
 
-/* Certs are not automatically varified during the handshake */
+/* Certs are not automatically verified during the handshake */
 static int
 tlsg_cert_verify( tlsg_session *ssl )
 {

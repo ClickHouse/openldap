@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2020 The OpenLDAP Foundation.
+ * Copyright 2005-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,7 @@
 #include <ac/unistd.h>
 #include "slap.h"
 #include "lutil.h"
-#include "config.h"
+#include "slap-config.h"
 
 struct ldif_tool {
 	Entry	**entries;			/* collected by bi_tool_entry_first() */
@@ -1384,6 +1384,7 @@ ldif_back_search( Operation *op, SlapReply *rs )
 	ldap_pvt_thread_rdwr_rlock(&li->li_rdwr);
 	rs->sr_err = search_tree( op, rs );
 	ldap_pvt_thread_rdwr_runlock(&li->li_rdwr);
+	rs->sr_ctrls = NULL;
 	send_ldap_result(op, rs);
 
 	return rs->sr_err;
@@ -1897,7 +1898,6 @@ ldif_tool_entry_modify( BackendDB *be, Entry *e, struct berval *text )
 static int
 ldif_tool_entry_delete( BackendDB *be, struct berval *ndn, struct berval *text )
 {
-	struct ldif_tool *tl = &((struct ldif_info *) be->be_private)->li_tool;
 	int rc = LDAP_SUCCESS;
 	const char *errmsg = NULL;
 	struct berval path;

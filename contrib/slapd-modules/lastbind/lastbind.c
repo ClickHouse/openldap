@@ -36,7 +36,7 @@
 #include <ac/time.h>
 #include <ac/string.h>
 #include <ac/ctype.h>
-#include "config.h"
+#include "slap-config.h"
 
 /* Per-instance configuration information */
 typedef struct lastbind_info {
@@ -225,7 +225,7 @@ done:
 			*/
 		}
 
-		rc = op->o_bd->be_modify( &op2, &r2 );
+		rc = op2.o_bd->be_modify( &op2, &r2 );
 		slap_mods_free( mod, 1 );
 	}
 

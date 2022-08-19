@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2020 The OpenLDAP Foundation.
+ * Copyright 1998-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -313,6 +313,11 @@ fe_op_modrdn( Operation *op, SlapReply *rs )
 		int repl_user = be_isupdate( op );
 		if ( !SLAP_SINGLE_SHADOW(op->o_bd) || repl_user )
 		{
+			if ( op->o_txnSpec ) {
+				txn_preop( op, rs );
+				goto cleanup;
+			}
+
 			op->o_bd = op_be;
 			op->o_bd->be_modrdn( op, rs );
 
@@ -385,6 +390,50 @@ cleanup:;
 	return rs->sr_err;
 }
 
+/* extracted from slap_modrdn2mods() */
+static int
+mod_op_add_val(
+	Operation *op,
+	AttributeDescription * const desc,
+	struct berval * const val,
+	short const sm_op )
+{
+	int rv = LDAP_SUCCESS;
+	Modifications *mod_tmp;
+	mod_tmp = ( Modifications * )ch_malloc( sizeof( Modifications ) );
+	mod_tmp->sml_desc = desc;
+	BER_BVZERO( &mod_tmp->sml_type );
+	mod_tmp->sml_numvals = 1;
+	mod_tmp->sml_values = ( BerVarray )ch_malloc( 2 * sizeof( struct berval ) );
+	ber_dupbv( &mod_tmp->sml_values[0], val );
+	mod_tmp->sml_values[1].bv_val = NULL;
+	if( desc->ad_type->sat_equality && desc->ad_type->sat_equality->smr_normalize) {
+		mod_tmp->sml_nvalues = ( BerVarray )ch_malloc( 2 * sizeof( struct berval ) );
+		rv = desc->ad_type->sat_equality->smr_normalize(
+			SLAP_MR_EQUALITY|SLAP_MR_VALUE_OF_ASSERTION_SYNTAX,
+			desc->ad_type->sat_syntax,
+			desc->ad_type->sat_equality,
+			&mod_tmp->sml_values[0],
+			&mod_tmp->sml_nvalues[0], NULL );
+		if (rv != LDAP_SUCCESS) {
+			ch_free(mod_tmp->sml_nvalues);
+			ch_free(mod_tmp->sml_values[0].bv_val);
+			ch_free(mod_tmp->sml_values);
+			ch_free(mod_tmp);
+			goto done;
+		}
+		mod_tmp->sml_nvalues[1].bv_val = NULL;
+	} else {
+		mod_tmp->sml_nvalues = NULL;
+	}
+	mod_tmp->sml_op = sm_op;
+	mod_tmp->sml_flags = 0;
+	mod_tmp->sml_next = op->orr_modlist;
+	op->orr_modlist = mod_tmp;
+done:
+	return rv;
+}
+
 int
 slap_modrdn2mods(
 	Operation	*op,
@@ -427,7 +476,6 @@ slap_modrdn2mods(
 	/* Add new attribute values to the entry */
 	for ( a_cnt = 0; new_rdn[a_cnt]; a_cnt++ ) {
 		AttributeDescription	*desc = NULL;
-		Modifications 		*mod_tmp;
 
 		rs->sr_err = slap_bv2ad( &new_rdn[a_cnt]->la_attr, &desc, &rs->sr_text );
 
@@ -452,43 +500,15 @@ slap_modrdn2mods(
 		}
 
 		/* Apply modification */
-		mod_tmp = ( Modifications * )ch_malloc( sizeof( Modifications ) );
-		mod_tmp->sml_desc = desc;
-		BER_BVZERO( &mod_tmp->sml_type );
-		mod_tmp->sml_numvals = 1;
-		mod_tmp->sml_values = ( BerVarray )ch_malloc( 2 * sizeof( struct berval ) );
-		ber_dupbv( &mod_tmp->sml_values[0], &new_rdn[a_cnt]->la_value );
-		mod_tmp->sml_values[1].bv_val = NULL;
-		if( desc->ad_type->sat_equality->smr_normalize) {
-			mod_tmp->sml_nvalues = ( BerVarray )ch_malloc( 2 * sizeof( struct berval ) );
-			rs->sr_err = desc->ad_type->sat_equality->smr_normalize(
-				SLAP_MR_EQUALITY|SLAP_MR_VALUE_OF_ASSERTION_SYNTAX,
-				desc->ad_type->sat_syntax,
-				desc->ad_type->sat_equality,
-				&mod_tmp->sml_values[0],
-				&mod_tmp->sml_nvalues[0], NULL );
-			if (rs->sr_err != LDAP_SUCCESS) {
-				ch_free(mod_tmp->sml_nvalues);
-				ch_free(mod_tmp->sml_values[0].bv_val);
-				ch_free(mod_tmp->sml_values);
-				ch_free(mod_tmp);
-				goto done;
-			}
-			mod_tmp->sml_nvalues[1].bv_val = NULL;
-		} else {
-			mod_tmp->sml_nvalues = NULL;
-		}
-		mod_tmp->sml_op = SLAP_MOD_SOFTADD;
-		mod_tmp->sml_flags = 0;
-		mod_tmp->sml_next = op->orr_modlist;
-		op->orr_modlist = mod_tmp;
+		rs->sr_err = mod_op_add_val( op, desc, &new_rdn[a_cnt]->la_value, SLAP_MOD_SOFTADD );
+		if (rs->sr_err != LDAP_SUCCESS)
+			goto done;
 	}
 
 	/* Remove old rdn value if required */
 	if ( op->orr_deleteoldrdn ) {
 		for ( d_cnt = 0; old_rdn[d_cnt]; d_cnt++ ) {
 			AttributeDescription	*desc = NULL;
-			Modifications 		*mod_tmp;
 
 			rs->sr_err = slap_bv2ad( &old_rdn[d_cnt]->la_attr, &desc, &rs->sr_text );
 			if ( rs->sr_err != LDAP_SUCCESS ) {
@@ -501,29 +521,9 @@ slap_modrdn2mods(
 			}
 
 			/* Apply modification */
-			mod_tmp = ( Modifications * )ch_malloc( sizeof( Modifications ) );
-			mod_tmp->sml_desc = desc;
-			BER_BVZERO( &mod_tmp->sml_type );
-			mod_tmp->sml_numvals = 1;
-			mod_tmp->sml_values = ( BerVarray )ch_malloc( 2 * sizeof( struct berval ) );
-			ber_dupbv( &mod_tmp->sml_values[0], &old_rdn[d_cnt]->la_value );
-			mod_tmp->sml_values[1].bv_val = NULL;
-			if( desc->ad_type->sat_equality->smr_normalize) {
-				mod_tmp->sml_nvalues = ( BerVarray )ch_malloc( 2 * sizeof( struct berval ) );
-				(void) (*desc->ad_type->sat_equality->smr_normalize)(
-					SLAP_MR_EQUALITY|SLAP_MR_VALUE_OF_ASSERTION_SYNTAX,
-					desc->ad_type->sat_syntax,
-					desc->ad_type->sat_equality,
-					&mod_tmp->sml_values[0],
-					&mod_tmp->sml_nvalues[0], NULL );
-				mod_tmp->sml_nvalues[1].bv_val = NULL;
-			} else {
-				mod_tmp->sml_nvalues = NULL;
-			}
-			mod_tmp->sml_op = LDAP_MOD_DELETE;
-			mod_tmp->sml_flags = 0;
-			mod_tmp->sml_next = op->orr_modlist;
-			op->orr_modlist = mod_tmp;
+			rs->sr_err = mod_op_add_val( op, desc, &old_rdn[d_cnt]->la_value, LDAP_MOD_DELETE );
+			if (rs->sr_err != LDAP_SUCCESS)
+				goto done;
 		}
 	}
 	
@@ -531,12 +531,8 @@ done:
 
 	/* LDAP v2 supporting correct attribute handling. */
 	if ( rs->sr_err != LDAP_SUCCESS && op->orr_modlist != NULL ) {
-		Modifications *tmp;
-
-		for ( ; op->orr_modlist != NULL; op->orr_modlist = tmp ) {
-			tmp = op->orr_modlist->sml_next;
-			ch_free( op->orr_modlist );
-		}
+		slap_mods_free( op->orr_modlist, 1 );
+		op->orr_modlist = NULL;
 	}
 
 	if ( new_rdn != NULL ) {

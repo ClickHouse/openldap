@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2020 The OpenLDAP Foundation.
+ * Copyright 2001-2022 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -368,6 +368,9 @@ conn_create(
 
 	bv.bv_len = snprintf( buf, sizeof( buf ), "%ld", c->c_n_ops_completed );
 	attr_merge_one( e, mi->mi_ad_monitorConnectionOpsCompleted, &bv, NULL );
+
+	bv.bv_len = snprintf( buf, sizeof( buf ), "%ld", c->c_n_ops_async );
+	attr_merge_one( e, mi->mi_ad_monitorConnectionOpsAsync, &bv, NULL );
 
 	bv.bv_len = snprintf( buf, sizeof( buf ), "%ld", c->c_n_get );
 	attr_merge_one( e, mi->mi_ad_monitorConnectionGet, &bv, NULL );

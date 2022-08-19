@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2020 The OpenLDAP Foundation.
+ * Copyright 2016-2022 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -642,12 +642,15 @@ asyncmeta_send_all_pending_ops(a_metaconn_t *mc, int candidate, void *ctx, int d
 	for (bc = LDAP_STAILQ_FIRST(&mc->mc_om_list); bc; bc = onext) {
 		meta_search_candidate_t ret;
 		onext = LDAP_STAILQ_NEXT(bc, bc_next);
-		if (bc->candidates[candidate].sr_msgid != META_MSGID_NEED_BIND || bc->bc_active > 0 || bc->op->o_abandon > 0) {
+		if (bc->candidates[candidate].sr_msgid == META_MSGID_NEED_BIND)
+			bc->candidates[candidate].sr_msgid = META_MSGID_GOT_BIND;
+		if (bc->candidates[candidate].sr_msgid != META_MSGID_GOT_BIND || bc->bc_active > 0 || bc->op->o_abandon > 0) {
 			continue;
 		}
 		bc->op->o_threadctx = ctx;
 		bc->op->o_tid = ldap_pvt_thread_pool_tid( ctx );
 		slap_sl_mem_setctx(ctx, bc->op->o_tmpmemctx);
+		operation_counter_init( bc->op, ctx );
 		bc->bc_active++;
 		ret = asyncmeta_send_pending_op(bc, candidate);
 		if (ret != META_SEARCH_CANDIDATE) {
@@ -697,6 +700,7 @@ asyncmeta_return_bind_errors(a_metaconn_t *mc, int candidate, SlapReply *bind_re
 			bc->op->o_threadctx = ctx;
 			bc->op->o_tid = ldap_pvt_thread_pool_tid( ctx );
 			slap_sl_mem_setctx(ctx, bc->op->o_tmpmemctx);
+			operation_counter_init( bc->op, ctx );
 			bc->rs.sr_err = bind_result->sr_err;
 			bc->rs.sr_text = bind_result->sr_text;
 			mc->pending_ops--;
@@ -1013,13 +1017,13 @@ asyncmeta_handle_search_msg(LDAPMessage *res, a_metaconn_t *mc, bm_context_t *bc
 
 			if ( candidates[ i ].sr_err == LDAP_SUCCESS ) {
 				Debug( LDAP_DEBUG_TRACE, "%s asyncmeta_search_result[%d] "
-				       "match=\"%s\" err=%ld",
+				       "match=\"%s\" err=%ld\n",
 				       op->o_log_prefix, i,
 				       candidates[ i ].sr_matched ? candidates[ i ].sr_matched : "",
 				       (long) candidates[ i ].sr_err );
 			} else {
 					Debug( LDAP_DEBUG_ANY,  "%s asyncmeta_search_result[%d] "
-				       "match=\"%s\" err=%ld (%s)",
+				       "match=\"%s\" err=%ld (%s)\n",
 				       op->o_log_prefix, i,
 				       candidates[ i ].sr_matched ? candidates[ i ].sr_matched : "",
 					       (long) candidates[ i ].sr_err, ldap_err2string( candidates[ i ].sr_err ) );
@@ -1380,10 +1384,11 @@ asyncmeta_op_read_error(a_metaconn_t *mc, int candidate, int error, void* ctx)
 	Operation *op;
 	SlapReply *rs;
 	SlapReply *candidates;
+
 	/* no outstanding ops, nothing to do but log */
 	Debug( LDAP_DEBUG_TRACE,
-	       "asyncmeta_op_read_error: ldr=%p\n",
-	       mc->mc_conns[candidate].msc_ldr );
+	       "asyncmeta_op_read_error: ldr=%p, err=%d\n",
+	       mc->mc_conns[candidate].msc_ldr, error );
 
 	ldap_pvt_thread_mutex_lock( &mc->mc_om_mutex );
 	/*someone may be trying to write */
@@ -1412,12 +1417,14 @@ asyncmeta_op_read_error(a_metaconn_t *mc, int candidate, int error, void* ctx)
 		}
 
 		if (bc->bc_active > 0) {
+			bc->bc_invalid = 1;
 			continue;
 		}
 
 		bc->op->o_threadctx = ctx;
 		bc->op->o_tid = ldap_pvt_thread_pool_tid( ctx );
 		slap_sl_mem_setctx(ctx, bc->op->o_tmpmemctx);
+		operation_counter_init( bc->op, ctx );
 
 		op = bc->op;
 		rs = &bc->rs;
@@ -1565,6 +1572,7 @@ retry_bc:
 		bc->op->o_threadctx = ctx;
 		bc->op->o_tid = ldap_pvt_thread_pool_tid( ctx );
 		slap_sl_mem_setctx(ctx, bc->op->o_tmpmemctx);
+		operation_counter_init( bc->op, ctx );
 		if (bc->op->o_abandon) {
 			ldap_pvt_thread_mutex_lock( &mc->mc_om_mutex );
 			asyncmeta_drop_bc( mc, bc);
@@ -1619,22 +1627,21 @@ retry_bc:
 
 	ldap_pvt_thread_mutex_lock( &mc->mc_om_mutex );
 	rc = --mc->mc_active;
-	ldap_pvt_thread_mutex_unlock( &mc->mc_om_mutex );
 	if (rc) {
 		i++;
+		ldap_pvt_thread_mutex_unlock( &mc->mc_om_mutex );
 		goto again;
 	}
 	slap_sl_mem_setctx(ctx, oldctx);
 	if (mc->mc_conns) {
-		ldap_pvt_thread_mutex_lock( &mc->mc_om_mutex );
 		for (i=0; i<ntargets; i++) {
 			if (!slapd_shutdown && !META_BACK_CONN_INVALID(msc)
 			    && mc->mc_conns[i].msc_ldr && mc->mc_conns[i].conn) {
 				connection_client_enable(mc->mc_conns[i].conn);
 			}
 		}
-		ldap_pvt_thread_mutex_unlock( &mc->mc_om_mutex );
 	}
+	ldap_pvt_thread_mutex_unlock( &mc->mc_om_mutex );
 	return NULL;
 }
 
@@ -1665,11 +1672,13 @@ void* asyncmeta_timeout_loop(void *ctx, void *arg)
 			}
 
 			if (bc->op->o_abandon ) {
-					/* set our memctx */
-				bc->op->o_threadctx = ctx;
-				bc->op->o_tid = ldap_pvt_thread_pool_tid( ctx );
-				slap_sl_mem_setctx(ctx, bc->op->o_tmpmemctx);
 				Operation *op = bc->op;
+
+				/* set our memctx */
+				op->o_threadctx = ctx;
+				op->o_tid = ldap_pvt_thread_pool_tid( ctx );
+				slap_sl_mem_setctx(ctx, op->o_tmpmemctx);
+				operation_counter_init( op, ctx );
 
 				LDAP_STAILQ_REMOVE(&mc->mc_om_list, bc, bm_context_t, bc_next);
 				mc->pending_ops--;
@@ -1727,6 +1736,7 @@ void* asyncmeta_timeout_loop(void *ctx, void *arg)
 			bc->op->o_threadctx = ctx;
 			bc->op->o_tid = ldap_pvt_thread_pool_tid( ctx );
 			slap_sl_mem_setctx(ctx, bc->op->o_tmpmemctx);
+			operation_counter_init( bc->op, ctx );
 
 			if (bc->searchtime) {
 				timeout_err = LDAP_TIMELIMIT_EXCEEDED;
@@ -1809,9 +1819,6 @@ void* asyncmeta_timeout_loop(void *ctx, void *arg)
 	if ( ldap_pvt_runqueue_isrunning( &slapd_rq, rtask )) {
 		ldap_pvt_runqueue_stoptask( &slapd_rq, rtask );
 	}
-	rtask->interval.tv_sec = 1;
-	rtask->interval.tv_usec = 0;
-	ldap_pvt_runqueue_resched(&slapd_rq, rtask, 0);
 	ldap_pvt_thread_mutex_unlock( &slapd_rq.rq_mutex );
 	return NULL;
 }

@@ -1,5 +1,5 @@
 # $OpenLDAP$
-# Copyright 2007-2020 The OpenLDAP Foundation, All Rights Reserved.
+# Copyright 2007-2022 The OpenLDAP Foundation, All Rights Reserved.
 # COPYING RESTRICTIONS APPLY, see COPYRIGHT.
 
 H1: Backends
@@ -54,7 +54,7 @@ the whole of the {{slapd-ldap(5)}} options.
 For example, the {{SECT: Translucent Proxy}}, which retrieves entries from a 
 remote LDAP server that can be partially overridden by the defined database, has
 only four specific {{translucent-}} directives, but can be configured using any 
-of the normal {{slapd-ldap(5)}} options. See {[slapo-translucent(5)}} for details.
+of the normal {{slapd-ldap(5)}} options. See {{slapo-translucent(5)}} for details.
 
 Other {{SECT: Overlays}} allow you to tag directives in front of a normal 
 {{slapd-ldap(5)}} directive. For example, the {{slapo-chain(5)}} overlay does 
@@ -404,7 +404,7 @@ H3: Further Information
 
 {{slapd-passwd}}(5)
 
-H2: Perl/Shell
+H2: Perl
 
 H3: Overview
 
@@ -413,17 +413,13 @@ into {{slapd}}(8). Any perl database section of the configuration file
 {{slapd.conf}}(5) must then specify what Perl module to use. Slapd then creates 
 a new Perl object that handles all the requests for that particular instance of the backend.
 
-The Shell backend to {{slapd}}(8) executes external programs to implement 
-operations, and is designed to make it easy to tie an existing database to the 
-slapd front-end. This backend is primarily intended to be used in prototypes.
-
-H3: back-perl/back-shell Configuration
+H3: back-perl Configuration
 
 LATER
 
 H3: Further Information
 
-{{slapd-shell}}(5) and {{slapd-perl}}(5)
+{{slapd-perl}}(5)
 
 H2: Relay
 
@@ -475,7 +471,7 @@ ODBC to connect to RDBMSes, and is highly configurable for SQL dialects RDBMSes
 may use, so it may be used for integration and distribution of data on different 
 RDBMSes, OSes, hosts etc., in other words, in highly heterogeneous environments.
 
-This backend is experimental.
+This backend is experimental and deprecated.
 
 H3: back-sql Configuration
 
@@ -553,7 +549,7 @@ only for PostgreSQL and IBM db2.
 Using {{F: sql-test000}}, files in {{F: servers/slapd/back-sql/rdbms_depend/pgsql/}}
 and the man page, you should be set.
 
-Note: This backend is experimental.
+Note: This backend is experimental and deprecated.
 
 H3: Further Information
 

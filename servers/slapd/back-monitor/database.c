@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2020 The OpenLDAP Foundation.
+ * Copyright 2001-2022 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -168,7 +168,7 @@ monitor_subsys_overlay_init_one(
 
 	} else {
 		attr_merge( e_overlay, slap_schema.si_ad_namingContexts,
-				be->be_suffix, NULL );
+				be->be_suffix, be->be_nsuffix );
 	}
 
 	mp_overlay = monitor_entrypriv_create();
@@ -254,9 +254,9 @@ monitor_subsys_database_init_one(
 
 	} else {
 		attr_merge( e, slap_schema.si_ad_namingContexts,
-			be->be_suffix, NULL );
+			be->be_suffix, be->be_nsuffix );
 		attr_merge( e_database, slap_schema.si_ad_namingContexts,
-			be->be_suffix, NULL );
+			be->be_suffix, be->be_nsuffix );
 
 		if ( SLAP_GLUE_SUBORDINATE( be ) ) {
 			BackendDB *sup_be = select_backend( &be->be_nsuffix[ 0 ], 1 );

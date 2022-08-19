@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2020 The OpenLDAP Foundation.
+ * Copyright 2000-2022 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
 #include "back-mdb.h"
 #include <lutil.h>
 #include <ldap_rq.h>
-#include "config.h"
+#include "slap-config.h"
 
 static const struct berval mdmi_databases[] = {
 	BER_BVC("ad2i"),
@@ -215,15 +215,18 @@ mdb_db_open( BackendDB *be, ConfigReply *cr )
 			&mdb->mi_dbis[i] );
 
 		if ( rc != 0 ) {
-			snprintf( cr->msg, sizeof(cr->msg), "database \"%s\": "
-				"mdb_dbi_open(%s/%s) failed: %s (%d).", 
-				be->be_suffix[0].bv_val, 
-				mdb->mi_dbenv_home, mdmi_databases[i].bv_val,
-				mdb_strerror(rc), rc );
-			Debug( LDAP_DEBUG_ANY,
-				LDAP_XSTRING(mdb_db_open) ": %s\n",
-				cr->msg );
-			goto fail;
+			/* when read-only, it's ok for ID2VAL or IDXCKP to not exist */
+			if (( flags & MDB_CREATE ) || ( i < MDB_ID2VAL )) {
+				snprintf( cr->msg, sizeof(cr->msg), "database \"%s\": "
+					"mdb_dbi_open(%s/%s) failed: %s (%d).",
+					be->be_suffix[0].bv_val,
+					mdb->mi_dbenv_home, mdmi_databases[i].bv_val,
+					mdb_strerror(rc), rc );
+				Debug( LDAP_DEBUG_ANY,
+					LDAP_XSTRING(mdb_db_open) ": %s\n",
+					cr->msg );
+				goto fail;
+			}
 		}
 
 		if ( i == MDB_ID2ENTRY )
@@ -408,7 +411,8 @@ mdb_back_initialize(
 		SLAP_BFLAG_INCREMENT |
 		SLAP_BFLAG_SUBENTRIES |
 		SLAP_BFLAG_ALIASES |
-		SLAP_BFLAG_REFERRALS;
+		SLAP_BFLAG_REFERRALS |
+		SLAP_BFLAG_TXNS;
 
 	bi->bi_controls = controls;
 

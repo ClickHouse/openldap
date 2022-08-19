@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2020 The OpenLDAP Foundation.
+ * Copyright 1999-2022 The OpenLDAP Foundation.
  * Portions Copyright 1999 Dmitry Kovalev.
  * Portions Copyright 2002 Pierangelo Masarati.
  * All rights reserved.
@@ -68,7 +68,7 @@ backsql_delete_all_attrs(
 	bda.dbh = dbh;
 	bda.e_id = eid;
 	
-	rc = avl_apply( eid->eid_oc->bom_attrs, backsql_delete_attr_f, &bda,
+	rc = ldap_avl_apply( eid->eid_oc->bom_attrs, backsql_delete_attr_f, &bda,
 			BACKSQL_AVL_STOP, AVL_INORDER );
 	if ( rc == BACKSQL_AVL_STOP ) {
 		return rs->sr_err;
@@ -95,7 +95,7 @@ backsql_delete_int(
 
 	sth = *sthp;
 
-	/* avl_apply ... */
+	/* ldap_avl_apply ... */
 	rs->sr_err = backsql_delete_all_attrs( op, rs, dbh, eid );
 	if ( rs->sr_err != LDAP_SUCCESS ) {
 		goto done;

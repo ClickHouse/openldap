@@ -2,7 +2,7 @@
 # $OpenLDAP$
 ## This work is part of OpenLDAP Software <http://www.openldap.org/>.
 ##
-## Copyright 2003-2020 The OpenLDAP Foundation.
+## Copyright 2003-2022 The OpenLDAP Foundation.
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -22,11 +22,14 @@ SRCS = overlays.c \
 	deref.c \
 	dyngroup.c \
 	dynlist.c \
+	homedir.c \
 	memberof.c \
+	otp.c \
 	pcache.c \
 	collect.c \
 	ppolicy.c \
 	refint.c \
+	remoteauth.c \
 	retcode.c \
 	rwm.c rwmconf.c rwmdn.c rwmmap.c \
 	seqmod.c \
@@ -87,8 +90,14 @@ dyngroup.la : dyngroup.lo
 dynlist.la : dynlist.lo
 	$(LTLINK_MOD) -module -o $@ dynlist.lo version.lo $(LINK_LIBS)
 
+homedir.la : homedir.lo
+	$(LTLINK_MOD) -module -o $@ homedir.lo version.lo $(LINK_LIBS)
+
 memberof.la : memberof.lo
 	$(LTLINK_MOD) -module -o $@ memberof.lo version.lo $(LINK_LIBS)
+
+otp.la : otp.lo
+	$(LTLINK_MOD) -module -o $@ otp.lo version.lo $(LINK_LIBS)
 
 pcache.la : pcache.lo
 	$(LTLINK_MOD) -module -o $@ pcache.lo version.lo $(LINK_LIBS)
@@ -101,6 +110,9 @@ ppolicy.la : ppolicy.lo
 
 refint.la : refint.lo
 	$(LTLINK_MOD) -module -o $@ refint.lo version.lo $(LINK_LIBS)
+
+remoteauth.la : remoteauth.lo
+	$(LTLINK_MOD) -module -o $@ remoteauth.lo version.lo $(LINK_LIBS)
 
 retcode.la : retcode.lo
 	$(LTLINK_MOD) -module -o $@ retcode.lo version.lo $(LINK_LIBS)
