@@ -1022,7 +1022,7 @@ tlso_session_endpoint( tls_session *sess, struct berval *buf, int is_server )
 
 	/* See RFC 5929 */
 	if ( md == NULL ||
-	     md == EVP_md_null() ||
+	     // md == EVP_md_null() ||
 #ifndef OPENSSL_NO_MD2
 	     md == EVP_md2() ||
 #endif
