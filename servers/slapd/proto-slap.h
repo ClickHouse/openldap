@@ -802,12 +802,14 @@ LDAP_SLAPD_F (Connection *) connection_init LDAP_P((
 
 LDAP_SLAPD_F (void) connection_closing LDAP_P((
 	Connection *c, const char *why ));
+LDAP_SLAPD_F (int) connection_is_active LDAP_P(( ber_socket_t s ));
 LDAP_SLAPD_F (int) connection_valid LDAP_P(( Connection *c ));
 LDAP_SLAPD_F (const char *) connection_state2str LDAP_P(( int state ))
 	LDAP_GCCATTR((const));
 
 LDAP_SLAPD_F (int) connection_read_activate LDAP_P((ber_socket_t s));
 LDAP_SLAPD_F (int) connection_write LDAP_P((ber_socket_t s));
+LDAP_SLAPD_F (int) connection_write_resume LDAP_P((Connection *c));
 
 LDAP_SLAPD_F (void) connection_op_finish LDAP_P((
 	Operation *op ));
@@ -876,6 +878,7 @@ LDAP_SLAPD_F (void) slap_queue_csn LDAP_P(( Operation *, struct berval * ));
  */
 LDAP_SLAPD_F (void) slapd_add_internal(ber_socket_t s, int isactive);
 LDAP_SLAPD_F (int) slapd_daemon_init( const char *urls );
+LDAP_SLAPD_F (int) slapd_daemon_resize( int newnum );
 LDAP_SLAPD_F (int) slapd_daemon_destroy(void);
 LDAP_SLAPD_F (int) slapd_daemon(void);
 LDAP_SLAPD_F (Listener **)	slapd_get_listeners LDAP_P((void));
@@ -891,6 +894,7 @@ LDAP_SLAPD_F (void) slap_resume_listeners LDAP_P((void));
 
 LDAP_SLAPD_F (int) slap_pause_server LDAP_P((void));
 LDAP_SLAPD_F (int) slap_unpause_server LDAP_P((void));
+LDAP_SLAPD_F (void) slap_sockaddrstr LDAP_P((Sockaddr *sa, struct berval *));
 
 LDAP_SLAPD_F (void) slapd_set_write LDAP_P((ber_socket_t s, int wake));
 LDAP_SLAPD_F (void) slapd_clr_write LDAP_P((ber_socket_t s, int wake));
@@ -1188,7 +1192,7 @@ LDAP_SLAPD_V (char *)	slap_known_controls[];
  * ldapsync.c
  */
 LDAP_SLAPD_F (void) slap_compose_sync_cookie LDAP_P((
-				Operation *, struct berval *, BerVarray, int, int ));
+				Operation *, struct berval *, BerVarray, int, int, struct berval * ));
 LDAP_SLAPD_F (void) slap_sync_cookie_free LDAP_P((
 				struct sync_cookie *, int free_cookie ));
 LDAP_SLAPD_F (int) slap_parse_csn_sid LDAP_P((

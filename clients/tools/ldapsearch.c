@@ -125,6 +125,9 @@ usage( void )
 	fprintf( stderr, _("  -b basedn  base dn for search\n"));
 	fprintf( stderr, _("  -c         continuous operation mode (do not stop on errors)\n"));
 	fprintf( stderr, _("  -E [!]<ext>[=<extparam>] search extensions (! indicates criticality)\n"));
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+	fprintf( stderr, _("             [!]accountUsability         (NetScape Account usability)\n"));
+#endif
 	fprintf( stderr, _("             [!]domainScope              (domain scope)\n"));
 	fprintf( stderr, _("             !dontUseCopy                (Don't Use Copy)\n"));
 	fprintf( stderr, _("             [!]mv=<filter>              (RFC 3876 matched values filter)\n"));
@@ -153,7 +156,7 @@ usage( void )
 #ifdef LDAP_CONTROL_X_SERVER_NOTIFICATION
 	fprintf( stderr, _("             [!]serverNotif              (MS AD Server Notification)\n"));
 #endif
-	fprintf( stderr, _("             [!]<oid>[=:<b64value>] (generic control; no response handling)\n"));
+	fprintf( stderr, _("             [!]<oid>[=:<value>|::<b64value>] (generic control; no response handling)\n"));
 	fprintf( stderr, _("  -f file    read operations from `file'\n"));
 	fprintf( stderr, _("  -F prefix  URL prefix for files (default: %s)\n"), def_urlpre);
 	fprintf( stderr, _("  -l limit   time limit (in seconds, or \"none\" or \"max\") for search\n"));
@@ -220,6 +223,10 @@ static int  includeufn, vals2tmp = 0;
 
 static int subentries = 0, valuesReturnFilter = 0;
 static char	*vrFilter = NULL;
+
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+static int accountUsability = 0;
+#endif
 
 #ifdef LDAP_CONTROL_DONTUSECOPY
 static int dontUseCopy = 0;
@@ -810,6 +817,22 @@ handle_private_option( int i )
 			serverNotif = 1 + crit;
 #endif /* LDAP_CONTROL_X_SERVER_NOTIFICATION */
 
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+		} else if ( strcasecmp( control, "accountUsability" ) == 0 ) {
+			if( accountUsability ) {
+				fprintf( stderr,
+					_("accountUsability control previously specified\n"));
+				exit( EXIT_FAILURE );
+			}
+			if( cvalue != NULL ) {
+				fprintf( stderr,
+			         _("accountUsability: no control value expected\n") );
+				usage();
+			}
+
+			accountUsability = 1 + crit;
+#endif /* LDAP_CONTROL_X_ACCOUNT_USABILITY */
+
 		} else if ( tool_is_oid( control ) ) {
 			if ( c != NULL ) {
 				int i;
@@ -1103,6 +1126,9 @@ getNextPage:
 	save_nctrls = nctrls;
 	i = nctrls;
 	if ( nctrls > 0
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+		|| accountUsability
+#endif
 #ifdef LDAP_CONTROL_DONTUSECOPY
 		|| dontUseCopy
 #endif
@@ -1130,6 +1156,20 @@ getNextPage:
 		|| valuesReturnFilter
 		|| vlv )
 	{
+
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+		if ( accountUsability ) {
+			if ( ctrl_add() ) {
+				tool_exit( ld, EXIT_FAILURE );
+			}
+
+			c[i].ldctl_oid = LDAP_CONTROL_X_ACCOUNT_USABILITY;
+			c[i].ldctl_value.bv_val = NULL;
+			c[i].ldctl_value.bv_len = 0;
+			c[i].ldctl_iscritical = accountUsability == 2;
+			i++;
+		}
+#endif
 
 #ifdef LDAP_CONTROL_DONTUSECOPY
 		if ( dontUseCopy ) {
@@ -1702,6 +1742,7 @@ static int dosearch(
 		tv_timelimitp = &tv_timelimit;
 	}
 
+again:
 	rc = ldap_search_ext( ld, base, scope, filter, attrs, attrsonly,
 		sctrls, cctrls, tv_timelimitp, sizelimit, &msgid );
 
@@ -1723,6 +1764,21 @@ static int dosearch(
 		tv.tv_sec = -1;
 		tv.tv_usec = 0;
 		tvp = &tv;
+	}
+
+	if ( backlog == 1 ) {
+		printf( _("\nWaiting for responses to accumulate, press Enter to continue: "));
+		fflush( stdout );
+		getchar();
+		printf( _("Abandoning msgid %d\n"), msgid );
+		ldap_abandon_ext( ld, msgid, NULL, NULL );
+		/* turn off syncrepl control */
+		ldap_set_option( ld, LDAP_OPT_SERVER_CONTROLS, NULL );
+		backlog = 2;
+		scope = LDAP_SCOPE_BASE;
+		goto again;
+	} else if ( backlog == 2 ) {
+		tv.tv_sec = timelimit;
 	}
 
 	while ((rc = ldap_result( ld, LDAP_RES_ANY,

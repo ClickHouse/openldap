@@ -1102,7 +1102,7 @@ dds_op_extended( Operation *op, SlapReply *rs )
 			ttl = di->di_min_ttl;
 		}
 
-		/* This does not apply to multi-master case */
+		/* This does not apply to multi-provider case */
 		if ( !( !SLAP_SINGLE_SHADOW( op->o_bd ) || be_isupdate( op ) ) ) {
 			/* we SHOULD return a referral in this case */
 			BerVarray defref = op->o_bd->be_update_refs
@@ -1992,6 +1992,7 @@ dds_initialize()
 
 	dds.on_bi.bi_type = "dds";
 
+	dds.on_bi.bi_flags = SLAPO_BFLAG_SINGLE;
 	dds.on_bi.bi_db_init = dds_db_init;
 	dds.on_bi.bi_db_open = dds_db_open;
 	dds.on_bi.bi_db_close = dds_db_close;

@@ -213,3 +213,45 @@ ldap_passwordpolicy_err2txt( LDAPPasswordPolicyError err )
 }
 
 #endif /* LDAP_CONTROL_PASSWORDPOLICYREQUEST */
+
+#ifdef LDAP_CONTROL_X_PASSWORD_EXPIRING
+
+int
+ldap_parse_password_expiring_control(
+	LDAP           *ld,
+	LDAPControl    *ctrl,
+	long           *secondsp )
+{
+	long seconds = 0;
+	char buf[sizeof("-2147483648")];
+	char *next;
+
+	assert( ld != NULL );
+	assert( LDAP_VALID( ld ) );
+	assert( ctrl != NULL );
+
+	if ( BER_BVISEMPTY( &ctrl->ldctl_value ) ||
+		ctrl->ldctl_value.bv_len >= sizeof(buf) ) {
+		ld->ld_errno = LDAP_DECODING_ERROR;
+		return(ld->ld_errno);
+	}
+
+	memcpy( buf, ctrl->ldctl_value.bv_val, ctrl->ldctl_value.bv_len );
+	buf[ctrl->ldctl_value.bv_len] = '\0';
+
+	seconds = strtol( buf, &next, 10 );
+	if ( next == buf || next[0] != '\0' ) goto exit;
+
+	if ( secondsp != NULL ) {
+		*secondsp = seconds;
+	}
+
+	ld->ld_errno = LDAP_SUCCESS;
+	return(ld->ld_errno);
+
+  exit:
+	ld->ld_errno = LDAP_DECODING_ERROR;
+	return(ld->ld_errno);
+}
+
+#endif /* LDAP_CONTROL_X_PASSWORD_EXPIRING */

@@ -1651,11 +1651,15 @@ typedef struct slap_bindconf {
 	char *sb_tls_cacert;
 	char *sb_tls_cacertdir;
 	char *sb_tls_reqcert;
+	char *sb_tls_reqsan;
 	char *sb_tls_cipher_suite;
 	char *sb_tls_protocol_min;
-#ifdef HAVE_OPENSSL_CRL
+	char *sb_tls_ecname;
+#ifdef HAVE_OPENSSL
 	char *sb_tls_crlcheck;
 #endif
+	int sb_tls_int_reqcert;
+	int sb_tls_int_reqsan;
 	int sb_tls_do_init;
 #endif
 } slap_bindconf;
@@ -1769,6 +1773,7 @@ struct sync_cookie {
 	int numcsns;
 	int rid;
 	struct berval octet_str;
+	struct berval delcsn;
 	int sid;
 	LDAP_STAILQ_ENTRY(sync_cookie) sc_next;
 };
@@ -1857,14 +1862,14 @@ struct BackendDB {
 #define SLAP_DBFLAG_DYNAMIC		0x0400U /* this db allows dynamicObjects */
 #define	SLAP_DBFLAG_MONITORING		0x0800U	/* custom monitoring enabled */
 #define SLAP_DBFLAG_SHADOW		0x8000U /* a shadow */
-#define SLAP_DBFLAG_SINGLE_SHADOW	0x4000U	/* a single-master shadow */
+#define SLAP_DBFLAG_SINGLE_SHADOW	0x4000U	/* a single-provider shadow */
 #define SLAP_DBFLAG_SYNC_SHADOW		0x1000U /* a sync shadow */
 #define SLAP_DBFLAG_SLURP_SHADOW	0x2000U /* a slurp shadow */
 #define SLAP_DBFLAG_SHADOW_MASK		(SLAP_DBFLAG_SHADOW|SLAP_DBFLAG_SINGLE_SHADOW|SLAP_DBFLAG_SYNC_SHADOW|SLAP_DBFLAG_SLURP_SHADOW)
 #define SLAP_DBFLAG_CLEAN		0x10000U /* was cleanly shutdown */
 #define SLAP_DBFLAG_ACL_ADD		0x20000U /* check attr ACLs on adds */
 #define SLAP_DBFLAG_SYNC_SUBENTRY	0x40000U /* use subentry for context */
-#define SLAP_DBFLAG_MULTI_SHADOW	0x80000U /* uses mirrorMode/multi-master */
+#define SLAP_DBFLAG_MULTI_SHADOW	0x80000U /* uses multi-provider */
 #define SLAP_DBFLAG_DISABLED	0x100000U
 #define SLAP_DBFLAG_LASTBIND	0x200000U
 	slap_mask_t	be_flags;
@@ -1892,7 +1897,7 @@ struct BackendDB {
 #define SLAP_SYNC_SHADOW(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_SYNC_SHADOW)
 #define SLAP_SLURP_SHADOW(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_SLURP_SHADOW)
 #define SLAP_SINGLE_SHADOW(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_SINGLE_SHADOW)
-#define SLAP_MULTIMASTER(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_MULTI_SHADOW)
+#define SLAP_MULTIPROVIDER(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_MULTI_SHADOW)
 #define SLAP_DBCLEAN(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_CLEAN)
 #define SLAP_DBACL_ADD(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_ACL_ADD)
 #define SLAP_SYNC_SUBENTRY(be)			(SLAP_DBFLAGS(be) & SLAP_DBFLAG_SYNC_SUBENTRY)
@@ -1974,7 +1979,7 @@ struct BackendDB {
 	slap_access_t	be_dfltaccess;	/* access given if no acl matches	   */
 	AttributeName	*be_extra_anlist;	/* attributes that need to be added to search requests (ITS#6513) */
 
-	/* Replica Information */
+	/* Consumer Information */
 	struct berval be_update_ndn;	/* allowed to make changes (in replicas) */
 	BerVarray	be_update_refs;	/* where to refer modifying clients to */
 	struct		be_pcl	*be_pending_csn_list;
@@ -2546,10 +2551,8 @@ typedef struct slap_counters_t {
 
 	ldap_pvt_mp_t		sc_ops_completed;
 	ldap_pvt_mp_t		sc_ops_initiated;
-#ifdef SLAPD_MONITOR
 	ldap_pvt_mp_t		sc_ops_completed_[SLAP_OP_LAST];
 	ldap_pvt_mp_t		sc_ops_initiated_[SLAP_OP_LAST];
-#endif /* SLAPD_MONITOR */
 } slap_counters_t;
 
 /*
@@ -2852,6 +2855,14 @@ typedef void (SEND_LDAP_INTERMEDIATE)(
 	((op)->o_conn->c_send_ldap_intermediate)( op, rs )
 
 typedef struct Listener Listener;
+
+#ifdef LDAP_PF_LOCAL
+#define SLAP_ADDRLEN	(MAXPATHLEN + sizeof("PATH="))
+#elif defined(LDAP_PF_INET6)
+#define SLAP_ADDRLEN	sizeof("IP=[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff]:65535")
+#else
+#define SLAP_ADDRLEN	sizeof("IP=255.255.255.255:65336")
+#endif
 
 /*
  * represents a connection from an ldap client

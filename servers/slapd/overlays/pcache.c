@@ -3781,7 +3781,7 @@ pc_ldadd( CfEntryInfo *p, Entry *e, ConfigArgs *ca )
 	ca->be = &cm->db;
 	/* Defer open if this is an LDAPadd */
 	if ( CONFIG_ONLINE_ADD( ca ))
-		ca->cleanup = pc_ldadd_cleanup;
+		config_push_cleanup( ca, pc_ldadd_cleanup );
 	else
 		cm->defer_db_open = 0;
 	ca->ca_private = on;
@@ -5554,7 +5554,7 @@ pcache_monitor_db_open( BackendDB *be )
 		static int warning = 0;
 
 		if ( warning++ == 0 ) {
-			Debug( LDAP_DEBUG_ANY, "pcache_monitor_db_open: "
+			Debug( LDAP_DEBUG_CONFIG, "pcache_monitor_db_open: "
 				"monitoring disabled; "
 				"configure monitor database to enable\n" );
 		}

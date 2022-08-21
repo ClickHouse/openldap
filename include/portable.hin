@@ -169,6 +169,9 @@
 /* Define to 1 if you have the `flock' function. */
 #undef HAVE_FLOCK
 
+/* Define to 1 if you have the `fmemopen' function. */
+#undef HAVE_FMEMOPEN
+
 /* Define to 1 if you have the `fstat' function. */
 #undef HAVE_FSTAT
 
@@ -369,9 +372,6 @@
 
 /* Define to 1 if you have the <openssl/bn.h> header file. */
 #undef HAVE_OPENSSL_BN_H
-
-/* define if you have OpenSSL with CRL checking capability */
-#undef HAVE_OPENSSL_CRL
 
 /* Define to 1 if you have the <openssl/crypto.h> header file. */
 #undef HAVE_OPENSSL_CRYPTO_H
@@ -798,6 +798,9 @@
 /* define to large integer type */
 #undef LBER_TAG_T
 
+/* define to 1 if library is reentrant */
+#undef LDAP_API_FEATURE_X_OPENLDAP_REENTRANT
+
 /* define to 1 if library is thread safe */
 #undef LDAP_API_FEATURE_X_OPENLDAP_THREAD_SAFE
 
@@ -932,9 +935,6 @@
 
 /* statically linked module */
 #undef SLAPD_MOD_STATIC
-
-/* define to support cn=Monitor backend */
-#undef SLAPD_MONITOR
 
 /* define to support NDB backend */
 #undef SLAPD_NDB

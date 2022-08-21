@@ -54,19 +54,12 @@ LDAP_BEGIN_DECL
 /* OpenLDAP API Features */
 #define LDAP_API_FEATURE_X_OPENLDAP LDAP_VENDOR_VERSION
 
-#if defined( LDAP_API_FEATURE_X_OPENLDAP_REENTRANT ) || \
-	( defined( LDAP_THREAD_SAFE ) && \
-		defined( LDAP_API_FEATURE_X_OPENLDAP_THREAD_SAFE ) )
-	/* -lldap may or may not be thread safe */
-	/* -lldap_r, if available, is always thread safe */
+#if defined( LDAP_API_FEATURE_X_OPENLDAP_REENTRANT )
 #	define	LDAP_API_FEATURE_THREAD_SAFE 		1
+#endif
+#if defined( LDAP_API_FEATURE_X_OPENLDAP_THREAD_SAFE )
 #	define  LDAP_API_FEATURE_SESSION_THREAD_SAFE	1
 #	define  LDAP_API_FEATURE_OPERATION_THREAD_SAFE	1
-#endif
-#if defined( LDAP_THREAD_SAFE ) && \
-	defined( LDAP_API_FEATURE_X_OPENLDAP_THREAD_SAFE )
-/* #define LDAP_API_FEATURE_SESSION_SAFE	1	*/
-/* #define LDAP_API_OPERATION_SESSION_SAFE	1	*/
 #endif
 
 
@@ -167,6 +160,7 @@ LDAP_BEGIN_DECL
 #define LDAP_OPT_X_TLS_CERT			0x6017
 #define LDAP_OPT_X_TLS_KEY			0x6018
 #define LDAP_OPT_X_TLS_PEERKEY_HASH	0x6019
+#define LDAP_OPT_X_TLS_REQUIRE_SAN	0x601a
 
 #define LDAP_OPT_X_TLS_NEVER	0
 #define LDAP_OPT_X_TLS_HARD		1
@@ -386,6 +380,23 @@ typedef struct ldapcontrol {
 /* LDAP VLV */
 #define LDAP_CONTROL_VLVREQUEST    	"2.16.840.1.113730.3.4.9"
 #define LDAP_CONTROL_VLVRESPONSE    "2.16.840.1.113730.3.4.10"
+
+/* Sun's analogue to ppolicy */
+#define LDAP_CONTROL_X_ACCOUNT_USABILITY "1.3.6.1.4.1.42.2.27.9.5.8"
+
+#define LDAP_TAG_X_ACCOUNT_USABILITY_AVAILABLE	((ber_tag_t) 0x80U)	/* primitive + 0 */
+#define LDAP_TAG_X_ACCOUNT_USABILITY_NOT_AVAILABLE	((ber_tag_t) 0xA1U)	/* constructed + 1 */
+
+#define LDAP_TAG_X_ACCOUNT_USABILITY_INACTIVE	((ber_tag_t) 0x80U)	/* primitive + 0 */
+#define LDAP_TAG_X_ACCOUNT_USABILITY_RESET	((ber_tag_t) 0x81U)	/* primitive + 1 */
+#define LDAP_TAG_X_ACCOUNT_USABILITY_EXPIRED	((ber_tag_t) 0x82U)	/* primitive + 2 */
+#define LDAP_TAG_X_ACCOUNT_USABILITY_REMAINING_GRACE	((ber_tag_t) 0x83U)	/* primitive + 3 */
+#define LDAP_TAG_X_ACCOUNT_USABILITY_UNTIL_UNLOCK	((ber_tag_t) 0x84U)	/* primitive + 4 */
+
+/* Netscape Password policy response controls */
+/* <draft-vchu-ldap-pwd-policy> */
+#define LDAP_CONTROL_X_PASSWORD_EXPIRED		"2.16.840.1.113730.3.4.4"
+#define LDAP_CONTROL_X_PASSWORD_EXPIRING	"2.16.840.1.113730.3.4.5"
 
 /* LDAP Unsolicited Notifications */
 #define	LDAP_NOTICE_OF_DISCONNECTION	"1.3.6.1.4.1.1466.20036" /* RFC 4511 */
@@ -2397,6 +2408,12 @@ LDAP_F( const char * )
 ldap_passwordpolicy_err2txt LDAP_P(( LDAPPasswordPolicyError ));
 #endif /* LDAP_CONTROL_PASSWORDPOLICYREQUEST */
 
+LDAP_F( int )
+ldap_parse_password_expiring_control LDAP_P((
+	LDAP           *ld,
+	LDAPControl    *ctrl,
+	long           *secondsp ));
+
 /*
  * LDAP Dynamic Directory Services Refresh -- RFC 2589
  *	in dds.c
@@ -2691,6 +2708,33 @@ ldap_parse_entrychange_control LDAP_P((
 	struct berval *prevdnp,
 	int *chgnumpresentp,
 	long *chgnump ));
+
+/* in account_usability.c */
+
+LDAP_F( int )
+ldap_create_accountusability_control LDAP_P((
+	LDAP *ld,
+	LDAPControl **ctrlp ));
+
+typedef struct LDAPAccountUsabilityMoreInfo {
+	ber_int_t inactive;
+	ber_int_t reset;
+	ber_int_t expired;
+	ber_int_t remaining_grace;
+	ber_int_t seconds_before_unlock;
+} LDAPAccountUsabilityMoreInfo;
+
+typedef union LDAPAccountUsability {
+	ber_int_t seconds_remaining;
+	LDAPAccountUsabilityMoreInfo more_info;
+} LDAPAccountUsability;
+
+LDAP_F( int )
+ldap_parse_accountusability_control LDAP_P((
+	LDAP           *ld,
+	LDAPControl    *ctrl,
+	int            *availablep,
+	LDAPAccountUsability *usabilityp ));
 
 
 /*

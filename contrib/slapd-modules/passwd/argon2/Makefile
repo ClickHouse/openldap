@@ -3,7 +3,7 @@
 LDAP_SRC = ../../../..
 LDAP_BUILD = ../../../..
 LDAP_INC = -I$(LDAP_BUILD)/include -I$(LDAP_SRC)/include -I$(LDAP_SRC)/servers/slapd
-LDAP_LIB = $(LDAP_BUILD)/libraries/libldap_r/libldap_r.la \
+LDAP_LIB = $(LDAP_BUILD)/libraries/libldap/libldap.la \
 	$(LDAP_BUILD)/libraries/liblber/liblber.la
 
 LIBTOOL = $(LDAP_BUILD)/libtool
@@ -31,9 +31,7 @@ PROGRAMS = pw-argon2.la
 MANPAGES = slapd-pw-argon2.5
 LTVER = 0:0:0
 
-#prefix=/usr/local
-prefix=`grep -e "^prefix =" $(LDAP_BUILD)/Makefile | cut -d= -f2`
-
+prefix=/usr/local
 exec_prefix=$(prefix)
 ldap_subdir=/openldap
 

@@ -49,10 +49,9 @@ of the proxy lined up with that of the proxied server.
 
 .LP
 Note: When looping back to the same instance of \fBslapd\fP(8), 
-each connection requires a new thread; as a consequence, \fBslapd\fP(8)
-must be compiled with thread support, and the \fBthreads\fP parameter 
-may need some tuning; in those cases, unless the multiple target feature
-is required, one may consider using \fBslapd\-relay\fP(5) instead, 
+each connection requires a new thread; as a consequence, the \fBslapd\fP(8)
+\fBthreads\fP parameter may need some tuning. In those cases, unless the
+multiple target feature is required, one may consider using \fBslapd\-relay\fP(5) instead, 
 which performs the relayed operation internally and thus reuses 
 the same connection.
 
@@ -380,7 +379,9 @@ for details on the syntax of this field.
 .B [tls_cacert=<file>]
 .B [tls_cacertdir=<path>]
 .B [tls_reqcert=never|allow|try|demand]
+.B [tls_reqsan=never|allow|try|demand]
 .B [tls_cipher_suite=<ciphers>]
+.B [tls_ecname=<ciphers>]
 .B [tls_protocol_min=<major>[.<minor>]]
 .B [tls_crlcheck=none|peer|all]
 .RS
@@ -539,7 +540,9 @@ is recommended.
 The TLS settings default to the same as the main slapd TLS settings,
 except for
 .B tls_reqcert
-which defaults to "demand".
+which defaults to "demand", and
+.B tls_reqsan
+which defaults to "allow"..
 
 The identity associated to this directive is also used for privileged
 operations whenever \fBidassert\-bind\fP is defined and \fBacl\-bind\fP

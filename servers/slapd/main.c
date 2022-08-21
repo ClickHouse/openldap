@@ -497,7 +497,7 @@ int main( int argc, char **argv )
 			urls = optarg;
 			break;
 
-		case 'c':	/* provide sync cookie, override if exist in replica */
+		case 'c':	/* provide sync cookie, override if exist in consumer */
 			scp = (struct sync_cookie *) ch_calloc( 1,
 										sizeof( struct sync_cookie ));
 			ber_str2bv( optarg, 0, 1, &scp->octet_str );
@@ -945,12 +945,13 @@ unhandled_option:;
 		FILE *fp = fopen( slapd_pid_file, "w" );
 
 		if ( fp == NULL ) {
+			char ebuf[128];
 			int save_errno = errno;
 
 			Debug( LDAP_DEBUG_ANY, "unable to open pid file "
 				"\"%s\": %d (%s)\n",
 				slapd_pid_file,
-				save_errno, strerror( save_errno ) );
+				save_errno, AC_STRERROR_R( save_errno, ebuf, sizeof(ebuf) ) );
 
 			free( slapd_pid_file );
 			slapd_pid_file = NULL;
@@ -967,12 +968,13 @@ unhandled_option:;
 		FILE *fp = fopen( slapd_args_file, "w" );
 
 		if ( fp == NULL ) {
+			char ebuf[128];
 			int save_errno = errno;
 
 			Debug( LDAP_DEBUG_ANY, "unable to open args file "
 				"\"%s\": %d (%s)\n",
 				slapd_args_file,
-				save_errno, strerror( save_errno ) );
+				save_errno, AC_STRERROR_R( save_errno, ebuf, sizeof(ebuf) ) );
 
 			free( slapd_args_file );
 			slapd_args_file = NULL;

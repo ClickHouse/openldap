@@ -61,8 +61,6 @@ extern char		*prog;
 
 /* connection */
 extern char		*ldapuri;
-extern char		*ldaphost;
-extern int		ldapport;
 extern int		use_tls;
 extern int		protocol;
 extern int		version;
@@ -98,6 +96,9 @@ extern int		chaining;
 extern ber_int_t	vlvPos;
 extern ber_int_t	vlvCount;
 extern struct berval	*vlvContext;
+
+/* features */
+extern int		backlog;
 
 /* options */
 extern struct timeval	nettimeout;

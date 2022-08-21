@@ -71,8 +71,6 @@ char		*prog = NULL;
 
 /* connection */
 char		*ldapuri = NULL;
-char		*ldaphost = NULL;
-int  		ldapport = 0;
 int		use_tls = 0;
 int		protocol = -1;
 int		version = 0;
@@ -159,6 +157,13 @@ static int print_syncdone( LDAP *ld, LDAPControl *ctrl );
 #ifdef LDAP_CONTROL_X_DIRSYNC
 static int print_dirsync( LDAP *ld, LDAPControl *ctrl );
 #endif
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+static int print_account_usability( LDAP *ld, LDAPControl *ctrl );
+#endif
+#ifdef LDAP_CONTROL_X_PASSWORD_EXPIRED
+static int print_netscape_pwexpired( LDAP *ld, LDAPControl *ctrl );
+static int print_netscape_pwexpiring( LDAP *ld, LDAPControl *ctrl );
+#endif
 
 static struct tool_ctrls_t {
 	const char	*oid;
@@ -189,12 +194,21 @@ static struct tool_ctrls_t {
 #ifdef LDAP_CONTROL_X_DIRSYNC
 	{ LDAP_CONTROL_X_DIRSYNC,			TOOL_SEARCH,	print_dirsync },
 #endif
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+	{ LDAP_CONTROL_X_ACCOUNT_USABILITY,		TOOL_SEARCH,	print_account_usability },
+#endif
+#ifdef LDAP_CONTROL_X_PASSWORD_EXPIRED
+	{ LDAP_CONTROL_X_PASSWORD_EXPIRED,		TOOL_ALL,	print_netscape_pwexpired },
+	{ LDAP_CONTROL_X_PASSWORD_EXPIRING,		TOOL_ALL,	print_netscape_pwexpiring },
+#endif
 	{ NULL,						0,		NULL }
 };
 
 /* "features" */
 enum { Intr_None = 0, Intr_Abandon, Intr_Cancel, Intr_Ignore }; 
 static volatile sig_atomic_t	gotintr, abcan;
+
+int backlog;
 
 
 #ifdef LDAP_CONTROL_X_SESSION_TRACKING
@@ -334,7 +348,6 @@ N_("             [!]sessiontracking[=<username>]\n")
 N_("             abandon, cancel, ignore (SIGINT sends abandon/cancel,\n"
    "             or ignores response; if critical, doesn't wait for SIGINT.\n"
    "             not really controls)\n")
-N_("  -h host    LDAP server\n"),
 N_("  -H URI     LDAP Uniform Resource Identifier(s)\n"),
 N_("  -I         use SASL Interactive mode\n"),
 N_("  -n         show what would be done but don't actually do it\n"),
@@ -343,7 +356,6 @@ N_("  -O props   SASL security properties\n"),
 N_("  -o <opt>[=<optparam>] any libldap ldap.conf options, plus\n"),
 N_("             ldif_wrap=<width> (in columns, or \"no\" for no wrapping)\n"),
 N_("             nettimeout=<timeout> (in seconds, or \"none\" or \"max\")\n"),
-N_("  -p port    port on LDAP server\n"),
 N_("  -Q         use SASL Quiet mode\n"),
 N_("  -R realm   SASL realm\n"),
 N_("  -U authcid SASL authentication identity\n"),
@@ -690,6 +702,13 @@ tool_args( int argc, char **argv )
 					gotintr = abcan;
 				}
 
+			} else if ( strcasecmp( control, "backlog" ) == 0 ) {
+				/* special search: accumulate lots of responses
+				 * but don't read any, force slapd writer to wait.
+				 * Then abandon the search and issue a new one.
+				 */
+				backlog = 1;
+
 			} else if ( tool_is_oid( control ) ) {
 				LDAPControl	*tmpctrls, ctrl;
 
@@ -754,13 +773,6 @@ tool_args( int argc, char **argv )
 				exit( EXIT_FAILURE );
 			}
 			infile = optarg;
-			break;
-		case 'h':	/* ldap host */
-			if( ldaphost != NULL ) {
-				fprintf( stderr, "%s: -h previously specified\n", prog );
-				exit( EXIT_FAILURE );
-			}
-			ldaphost = optarg;
 			break;
 		case 'H':	/* ldap URI */
 			if( ldapuri != NULL ) {
@@ -874,18 +886,6 @@ tool_args( int argc, char **argv )
 			fprintf( stderr, "%s: not compiled with SASL support\n", prog );
 			exit( EXIT_FAILURE );
 #endif
-			break;
-		case 'p':
-			if( ldapport ) {
-				fprintf( stderr, "%s: -p previously specified\n", prog );
-				exit( EXIT_FAILURE );
-			}
-			ival = strtol( optarg, &next, 10 );
-			if ( next == NULL || next[0] != '\0' ) {
-				fprintf( stderr, "%s: unable to parse port number \"%s\"\n", prog, optarg );
-				exit( EXIT_FAILURE );
-			}
-			ldapport = ival;
 			break;
 		case 'P':
 			ival = strtol( optarg, &next, 10 );
@@ -1121,22 +1121,6 @@ tool_args( int argc, char **argv )
 #endif
 	}
 
-	if( ldapuri == NULL ) {
-		if( ldapport && ( ldaphost == NULL )) {
-			fprintf( stderr, "%s: -p without -h is invalid.\n", prog );
-			exit( EXIT_FAILURE );
-		}
-	} else {
-		if( ldaphost != NULL ) {
-			fprintf( stderr, "%s: -H incompatible with -h\n", prog );
-			exit( EXIT_FAILURE );
-		}
-		if( ldapport ) {
-			fprintf( stderr, "%s: -H incompatible with -p\n", prog );
-			exit( EXIT_FAILURE );
-		}
-	}
-
 	if( protocol == LDAP_VERSION2 ) {
 		if( assertctl || authzid || manageDIT || manageDSAit ||
 #ifdef LDAP_CONTROL_OBSOLETE_PROXY_AUTHZ
@@ -1207,19 +1191,7 @@ tool_conn_setup( int dont, void (*private_setup)( LDAP * ) )
 	if ( !dont ) {
 		int rc;
 
-		if( ( ldaphost != NULL || ldapport ) && ( ldapuri == NULL ) ) {
-			/* construct URL */
-			LDAPURLDesc url;
-			memset( &url, 0, sizeof(url));
-
-			url.lud_scheme = "ldap";
-			url.lud_host = ldaphost;
-			url.lud_port = ldapport;
-			url.lud_scope = LDAP_SCOPE_DEFAULT;
-
-			ldapuri = ldap_url_desc2str( &url );
-
-		} else if ( ldapuri != NULL ) {
+		if ( ldapuri != NULL ) {
 			LDAPURLDesc	*ludlist, **ludp;
 			char		**urls = NULL;
 			int		nurls = 0;
@@ -1638,6 +1610,23 @@ tool_bind( LDAP *ld )
 			tool_print_ctrls( ld, ctmp );
 		}
 	}
+
+#ifdef LDAP_CONTROL_X_PASSWORD_EXPIRED
+	if ( ctrls ) {
+		LDAPControl *ctrl;
+		ctrl = ldap_control_find( LDAP_CONTROL_X_PASSWORD_EXPIRED,
+			ctrls, NULL );
+		if ( !ctrl )
+			ctrl = ldap_control_find( LDAP_CONTROL_X_PASSWORD_EXPIRING,
+				ctrls, NULL );
+		if ( ctrl ) {
+			LDAPControl *ctmp[2];
+			ctmp[0] = ctrl;
+			ctmp[1] = NULL;
+			tool_print_ctrls( ld, ctmp );
+		}
+	}
+#endif
 
 	if ( ctrls ) {
 		ldap_controls_free( ctrls );
@@ -2072,12 +2061,13 @@ print_paged_results( LDAP *ld, LDAPControl *ctrl )
 		return 1;
 
 	} else {
-		/* FIXME: check buffer overflow */
 		char	buf[ BUFSIZ ], *ptr = buf;
+		int plen;
 
 		if ( estimate > 0 ) {
-			ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
-				"estimate=%d", estimate );
+			plen = sprintf( buf, "estimate=%d cookie=", estimate );
+		} else {
+			plen = sprintf( buf, "cookie=" );
 		}
 
 		if ( pr_cookie.bv_len > 0 ) {
@@ -2085,29 +2075,26 @@ print_paged_results( LDAP *ld, LDAPControl *ctrl )
 
 			bv.bv_len = LUTIL_BASE64_ENCODE_LEN(
 				pr_cookie.bv_len ) + 1;
-			bv.bv_val = ber_memalloc( bv.bv_len + 1 );
+			ptr = ber_memalloc( bv.bv_len + 1 + plen );
+			bv.bv_val = ptr + plen;
+
+			strcpy( ptr, buf );
 
 			bv.bv_len = lutil_b64_ntop(
 				(unsigned char *) pr_cookie.bv_val,
 				pr_cookie.bv_len,
 				bv.bv_val, bv.bv_len );
 
-			ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
-				"%scookie=%s", ptr == buf ? "" : " ",
-				bv.bv_val );
-
-			ber_memfree( bv.bv_val );
-
 			pr_morePagedResults = 1;
-
-		} else {
-			ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
-				"%scookie=", ptr == buf ? "" : " " );
+			plen += bv.bv_len;
 		}
 
 		tool_write_ldif( ldif ? LDIF_PUT_COMMENT : LDIF_PUT_VALUE,
 			ldif ? "pagedresults: " : "pagedresults",
-			buf, ptr - buf );
+			ptr, plen );
+
+		if ( ptr != buf )
+			ber_memfree( ptr );
 	}
 
 	return 0;
@@ -2564,6 +2551,99 @@ print_ppolicy( LDAP *ld, LDAPControl *ctrl )
 
 		tool_write_ldif( ldif ? LDIF_PUT_COMMENT : LDIF_PUT_VALUE,
 			ldif ? "ppolicy: " : "ppolicy", buf, ptr - buf );
+	}
+
+	return rc;
+}
+#endif
+
+#ifdef LDAP_CONTROL_X_PASSWORD_EXPIRED
+static int
+print_netscape_pwexpired( LDAP *ld, LDAPControl *ctrl )
+{
+	printf(_("# PasswordExpired control\n") );
+	return 0;
+}
+
+static int
+print_netscape_pwexpiring( LDAP *ld, LDAPControl *ctrl )
+{
+	long expiring = 0;
+	int rc;
+
+	rc = ldap_parse_password_expiring_control( ld, ctrl, &expiring );
+	if ( rc == LDAP_SUCCESS ) {
+		printf(_("# PasswordExpiring control seconds=%ld\n"), expiring );
+	}
+	return rc;
+}
+#endif
+
+#ifdef LDAP_CONTROL_X_ACCOUNT_USABILITY
+static int
+print_account_usability( LDAP *ld, LDAPControl *ctrl )
+{
+	LDAPAccountUsability usability;
+	ber_int_t available = 0;
+	int rc;
+
+	rc = ldap_parse_accountusability_control( ld, ctrl, &available, &usability );
+	if ( rc == LDAP_SUCCESS ) {
+		char	buf[ BUFSIZ ], *ptr = buf;
+
+		ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+			   "%savailable", available ? "" : "not " );
+		if ( available ) {
+			if ( usability.seconds_remaining == -1 ) {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					" and does not expire" );
+			} else {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					" expire=%d", usability.seconds_remaining );
+			}
+		} else {
+			int added = 0;
+			ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+				" (" /* ')' */ );
+
+			if ( usability.more_info.inactive ) {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					"inactive " );
+				added++;
+			}
+			if ( usability.more_info.reset ) {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					"reset " );
+				added++;
+			}
+			if ( usability.more_info.expired ) {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					"expired " );
+				added++;
+			}
+
+			if ( added ) {
+				ptr[-1] = ')';
+				*ptr++ = ' ';
+			} else {
+				*(--ptr) = '\0';
+			}
+
+			if ( usability.more_info.remaining_grace != -1 ) {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					"grace=%d ", usability.more_info.remaining_grace );
+			}
+
+			if ( usability.more_info.seconds_before_unlock != -1 ) {
+				ptr += snprintf( ptr, sizeof( buf ) - ( ptr - buf ),
+					"seconds_before_unlock=%d ", usability.more_info.seconds_before_unlock );
+			}
+
+			*(--ptr) = '\0';
+		}
+
+		tool_write_ldif( ldif ? LDIF_PUT_COMMENT : LDIF_PUT_VALUE,
+			ldif ? "accountUsability: " : "accountUsability", buf, ptr - buf );
 	}
 
 	return rc;

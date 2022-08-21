@@ -35,6 +35,7 @@
 
 /* global vars */
 pid_t pid;
+int debug;
 
 /* static vars */
 static char progname[ BUFSIZ ];
@@ -212,8 +213,6 @@ tester_init( const char *pname, tester_t ptype )
 		.outerloops = 1,
 
 		.uri = NULL,
-		.host = "localhost",
-		.port = 389,
 	};
 
 	pid = getpid();
@@ -311,7 +310,6 @@ tester_config_opt( struct tester_conn_args *config, char opt, char *optarg )
 
 		case 'd':
 			{
-				int debug;
 				if ( lutil_atoi( &debug, optarg ) != 0 ) {
 					return -1;
 				}
@@ -334,10 +332,6 @@ tester_config_opt( struct tester_conn_args *config, char opt, char *optarg )
 
 		case 'H':
 			config->uri = optarg;
-			break;
-
-		case 'h':
-			config->host = optarg;
 			break;
 
 		case 'i':
@@ -413,12 +407,6 @@ tester_config_opt( struct tester_conn_args *config, char opt, char *optarg )
 			break;
 #endif
 
-		case 'p':
-			if ( lutil_atoi( &config->port, optarg ) != 0 ) {
-				return -1;
-			}
-			break;
-
 		case 'r':
 			if ( lutil_atoi( &config->retries, optarg ) != 0 ) {
 				return -1;
@@ -454,14 +442,6 @@ tester_config_opt( struct tester_conn_args *config, char opt, char *optarg )
 void
 tester_config_finish( struct tester_conn_args *config )
 {
-	if ( !config->uri ) {
-		static char	uribuf[ BUFSIZ ];
-
-		config->uri = uribuf;
-		snprintf( uribuf, sizeof( uribuf ), "ldap://%s:%d",
-				config->host, config->port );
-	}
-
 	if ( config->authmethod == -1 ) {
 #ifdef HAVE_CYRUS_SASL
 		if ( config->binddn != NULL ) {
@@ -554,7 +534,9 @@ retry:;
 					}
 			}
 			ldap_unbind_ext( ld, NULL, NULL );
-			exit( EXIT_FAILURE );
+			ld = NULL;
+			if ( !( flags & TESTER_INIT_NOEXIT ))
+				exit( EXIT_FAILURE );
 		}
 	}
 

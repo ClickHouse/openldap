@@ -184,7 +184,7 @@ enum {
 	CFG_SSTR_IF_MAX,
 	CFG_SSTR_IF_MIN,
 	CFG_TTHREADS,
-	CFG_MIRRORMODE,
+	CFG_MULTIPROVIDER,
 	CFG_HIDDEN,
 	CFG_MONITORING,
 	CFG_SERVERID,
@@ -453,11 +453,7 @@ static ConfigTable config_back_cf_table[] = {
 			"EQUALITY caseIgnoreMatch "
 			"SYNTAX OMsDirectoryString X-ORDERED 'VALUES' )", NULL, NULL },
 	{ "listener-threads", "count", 2, 0, 0,
-#ifdef NO_THREADS
-		ARG_IGNORED, NULL,
-#else
 		ARG_UINT|ARG_MAGIC|CFG_LTHREADS, &config_generic,
-#endif
 		"( OLcfgGlAt:93 NAME 'olcListenerThreads' "
 			"EQUALITY integerMatch "
 			"SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
@@ -477,8 +473,8 @@ static ConfigTable config_back_cf_table[] = {
 		&config_generic, "( OLcfgDbAt:0.6 NAME 'olcMaxDerefDepth' "
 			"EQUALITY integerMatch "
 			"SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
-	{ "mirrormode", "on|off", 2, 2, 0, ARG_DB|ARG_ON_OFF|ARG_MAGIC|CFG_MIRRORMODE,
-		&config_generic, "( OLcfgDbAt:0.16 NAME 'olcMirrorMode' "
+	{ "multiprovider", "on|off", 2, 2, 0, ARG_DB|ARG_ON_OFF|ARG_MAGIC|CFG_MULTIPROVIDER,
+		&config_generic, "( OLcfgDbAt:0.16 NAME ( 'olcMultiProvider' 'olcMirrorMode' ) "
 			"EQUALITY booleanMatch "
 			"SYNTAX OMsBoolean SINGLE-VALUE )", NULL, NULL },
 	{ "moduleload",	"file", 2, 0, 0,
@@ -539,7 +535,7 @@ static ConfigTable config_back_cf_table[] = {
 #endif
 		"( OLcfgGlAt:38 NAME 'olcPlugin' "
 			"EQUALITY caseIgnoreMatch "
-			"SYNTAX OMsDirectoryString )", NULL, NULL },
+			"SYNTAX OMsDirectoryString X-ORDERED 'VALUES' )", NULL, NULL },
 	{ "pluginlog", "filename", 2, 2, 0,
 #ifdef LDAP_SLAPI
 		ARG_STRING, &slapi_log_file,
@@ -727,20 +723,12 @@ static ConfigTable config_back_cf_table[] = {
 			"DESC 'Custom TCP buffer size' "
 			"SYNTAX OMsDirectoryString )", NULL, NULL },
 	{ "threads", "count", 2, 2, 0,
-#ifdef NO_THREADS
-		ARG_IGNORED, NULL,
-#else
 		ARG_INT|ARG_MAGIC|CFG_THREADS, &config_generic,
-#endif
 		"( OLcfgGlAt:66 NAME 'olcThreads' "
 			"EQUALITY integerMatch "
 			"SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
 	{ "threadqueues", "count", 2, 2, 0,
-#ifdef NO_THREADS
-		ARG_IGNORED, NULL,
-#else
 		ARG_INT|ARG_MAGIC|CFG_THREADQS, &config_generic,
-#endif
 		"( OLcfgGlAt:95 NAME 'olcThreadQueues' "
 			"EQUALITY integerMatch "
 			"SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
@@ -824,7 +812,7 @@ static ConfigTable config_back_cf_table[] = {
 			"EQUALITY caseExactMatch "
 			"SYNTAX OMsDirectoryString SINGLE-VALUE )", NULL, NULL },
 	{ "TLSCRLCheck", NULL, 2, 2, 0,
-#if defined(HAVE_TLS) && defined(HAVE_OPENSSL_CRL)
+#if defined(HAVE_TLS) && defined(HAVE_OPENSSL)
 		CFG_TLS_CRLCHECK|ARG_STRING|ARG_MAGIC, &config_tls_config,
 #else
 		ARG_IGNORED, NULL,
@@ -904,6 +892,9 @@ static ConfigTable config_back_cf_table[] = {
 		&global_writetimeout, "( OLcfgGlAt:88 NAME 'olcWriteTimeout' "
 			"EQUALITY integerMatch "
 			"SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
+	/* Legacy keywords */
+	{ "mirrormode", "on|off", 2, 2, 0, ARG_DB|ARG_ON_OFF|ARG_MAGIC|CFG_MULTIPROVIDER,
+		&config_generic, NULL, NULL, NULL },
 	{ NULL,	NULL, 0, 0, 0, ARG_IGNORED,
 		NULL, NULL, NULL, NULL }
 };
@@ -993,7 +984,7 @@ static ConfigOCs cf_ocs[] = {
 		 "olcReplicaArgsFile $ olcReplicaPidFile $ olcReplicationInterval $ "
 		 "olcReplogFile $ olcRequires $ olcRestrict $ olcRootDN $ olcRootPW $ "
 		 "olcSchemaDN $ olcSecurity $ olcSizeLimit $ olcSyncUseSubentry $ olcSyncrepl $ "
-		 "olcTimeLimit $ olcUpdateDN $ olcUpdateRef $ olcMirrorMode $ "
+		 "olcTimeLimit $ olcUpdateDN $ olcUpdateRef $ olcMultiProvider $ "
 		 "olcMonitoring $ olcExtraAttrs ) )",
 		 	Cft_Database, NULL, cfAddDatabase },
 	{ "( OLcfgGlOc:5 "
@@ -1051,6 +1042,14 @@ typedef struct ADlist {
 } ADlist;
 
 static ADlist *sortVals;
+
+static int new_daemon_threads;
+
+static int
+config_resize_lthreads(ConfigArgs *c)
+{
+	return slapd_daemon_resize( new_daemon_threads );
+}
 
 static int
 config_generic(ConfigArgs *c) {
@@ -1334,9 +1333,9 @@ config_generic(ConfigArgs *c) {
 		case CFG_SYNC_SUBENTRY:
 			c->value_int = (SLAP_SYNC_SUBENTRY(c->be) != 0);
 			break;
-		case CFG_MIRRORMODE:
+		case CFG_MULTIPROVIDER:
 			if ( SLAP_SHADOW(c->be))
-				c->value_int = (SLAP_MULTIMASTER(c->be) != 0);
+				c->value_int = (SLAP_MULTIPROVIDER(c->be) != 0);
 			else
 				rc = 1;
 			break;
@@ -1430,13 +1429,18 @@ config_generic(ConfigArgs *c) {
 		case CFG_SYNC_SUBENTRY:
 			break;
 
-		/* no-ops, requires slapd restart */
+#ifdef LDAP_SLAPI
 		case CFG_PLUGIN:
+			slapi_int_unregister_plugins(c->be, c->valx);
+			break;
+#endif
+
+		/* no-op, requires slapd restart */
 		case CFG_MODLOAD:
 			snprintf(c->log, sizeof( c->log ), "change requires slapd restart");
 			break;
 
-		case CFG_MIRRORMODE:
+		case CFG_MULTIPROVIDER:
 			SLAP_DBFLAGS(c->be) &= ~SLAP_DBFLAG_MULTI_SHADOW;
 			if(SLAP_SHADOW(c->be))
 				SLAP_DBFLAGS(c->be) |= SLAP_DBFLAG_SINGLE_SHADOW;
@@ -1810,7 +1814,7 @@ config_generic(ConfigArgs *c) {
 		case CFG_THREADQS:
 			if ( c->value_int < 1 ) {
 				snprintf( c->cr_msg, sizeof( c->cr_msg ),
-					"threadqueuess=%d smaller than minimum value 1",
+					"threadqueues=%d smaller than minimum value 1",
 					c->value_int );
 				Debug(LDAP_DEBUG_ANY, "%s: %s.\n",
 					c->log, c->cr_msg );
@@ -1828,6 +1832,14 @@ config_generic(ConfigArgs *c) {
 			break;
 
 		case CFG_LTHREADS:
+			if ( c->value_uint < 1 ) {
+				snprintf( c->cr_msg, sizeof( c->cr_msg ),
+					"listenerthreads=%u smaller than minimum value 1",
+					c->value_uint );
+				Debug(LDAP_DEBUG_ANY, "%s: %s.\n",
+					c->log, c->cr_msg );
+				return 1;
+			}
 			{ int mask = 0;
 			/* use a power of two */
 			while (c->value_uint > 1) {
@@ -1835,8 +1847,8 @@ config_generic(ConfigArgs *c) {
 				mask <<= 1;
 				mask |= 1;
 			}
-			slapd_daemon_mask = mask;
-			slapd_daemon_threads = mask+1;
+			new_daemon_threads = mask+1;
+			config_push_cleanup( c, config_resize_lthreads );
 			}
 			break;
 
@@ -2277,7 +2289,7 @@ sortval_reject:
 				SLAP_DBFLAGS(c->be) &= ~SLAP_DBFLAG_LASTBIND;
 			break;
 
-		case CFG_MIRRORMODE:
+		case CFG_MULTIPROVIDER:
 			if(c->value_int && !SLAP_SHADOW(c->be)) {
 				snprintf( c->cr_msg, sizeof( c->cr_msg ), "<%s> database is not a shadow",
 					c->argv[0] );
@@ -2421,7 +2433,7 @@ sortval_reject:
 
 #ifdef LDAP_SLAPI
 		case CFG_PLUGIN:
-			if(slapi_int_read_config(c->be, c->fname, c->lineno, c->argc, c->argv) != LDAP_SUCCESS)
+			if(slapi_int_read_config(c->be, c->fname, c->lineno, c->argc, c->argv, c->valx) != LDAP_SUCCESS)
 				return(1);
 			slapi_plugins_used++;
 			break;
@@ -4049,7 +4061,7 @@ config_shadow( ConfigArgs *c, slap_mask_t flag )
 
 	} else {
 		SLAP_DBFLAGS(c->be) |= (SLAP_DBFLAG_SHADOW | flag);
-		if ( !SLAP_MULTIMASTER( c->be ))
+		if ( !SLAP_MULTIPROVIDER( c->be ))
 			SLAP_DBFLAGS(c->be) |= SLAP_DBFLAG_SINGLE_SHADOW;
 	}
 
@@ -4199,11 +4211,11 @@ config_tls_option(ConfigArgs *c) {
 	if (c->op == SLAP_CONFIG_EMIT) {
 		return ldap_pvt_tls_get_option( ld, flag, berval ? (void *)&c->value_bv : (void *)&c->value_string );
 	} else if ( c->op == LDAP_MOD_DELETE ) {
-		c->cleanup = config_tls_cleanup;
+		config_push_cleanup( c, config_tls_cleanup );
 		return ldap_pvt_tls_set_option( ld, flag, NULL );
 	}
 	if ( !berval ) ch_free(c->value_string);
-	c->cleanup = config_tls_cleanup;
+	config_push_cleanup( c, config_tls_cleanup );
 	rc = ldap_pvt_tls_set_option(ld, flag, berval ? (void *)&c->value_bv : (void *)c->argv[1]);
 	if ( berval ) ch_free(c->value_bv.bv_val);
 	return rc;
@@ -4227,11 +4239,11 @@ config_tls_config(ConfigArgs *c) {
 		return slap_tls_get_config( slap_tls_ld, flag, &c->value_string );
 	} else if ( c->op == LDAP_MOD_DELETE ) {
 		int i = 0;
-		c->cleanup = config_tls_cleanup;
+		config_push_cleanup( c, config_tls_cleanup );
 		return ldap_pvt_tls_set_option( slap_tls_ld, flag, &i );
 	}
 	ch_free( c->value_string );
-	c->cleanup = config_tls_cleanup;
+	config_push_cleanup( c, config_tls_cleanup );
 	if ( isdigit( (unsigned char)c->argv[1][0] ) && c->type != CFG_TLS_PROTOCOL_MIN ) {
 		if ( lutil_atoi( &i, c->argv[1] ) != 0 ) {
 			Debug(LDAP_DEBUG_ANY, "%s: "
@@ -4558,9 +4570,10 @@ read_config(const char *fname, const char *dir) {
 			struct stat st;
 
 			if ( stat( dir, &st ) < 0 ) {
+				int saved_errno = errno;
 				Debug( LDAP_DEBUG_ANY,
 					"invalid config directory %s, error %d\n",
-						dir, errno );
+						dir, saved_errno );
 				return 1;
 			}
 			cfdir = dir;
@@ -5617,8 +5630,8 @@ ok:
 				rc = ca->bi->bi_db_open( ca->be, &ca->reply );
 				ca->be->bd_info = bi_orig;
 			}
-		} else if ( ca->cleanup ) {
-			rc = ca->cleanup( ca );
+		} else if ( ca->num_cleanups ) {
+			rc = config_run_cleanup( ca );
 		}
 		if ( rc ) {
 			if (ca->cr_msg[0] == '\0')
@@ -5688,6 +5701,8 @@ done:
 			overlay_destroy_one( ca->be, (slap_overinst *)ca->bi );
 		} else if ( coptr->co_type == Cft_Schema ) {
 			schema_destroy_one( ca, colst, nocs, last );
+		} else if ( ca->num_cleanups ) {
+			config_run_cleanup( ca );
 		}
 	}
 done_noop:
@@ -6226,8 +6241,8 @@ out:
 		ca->reply = msg;
 	}
 
-	if ( ca->cleanup ) {
-		i = ca->cleanup( ca );
+	if ( ca->num_cleanups ) {
+		i = config_run_cleanup( ca );
 		if (rc == LDAP_SUCCESS)
 			rc = i;
 	}

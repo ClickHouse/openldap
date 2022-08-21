@@ -20,8 +20,8 @@
 #ifndef	_LDAP_INT_H
 #define	_LDAP_INT_H 1
 
-#ifdef LDAP_R_COMPILE
-#define LDAP_THREAD_SAFE 1
+#ifndef NO_THREADS
+#define LDAP_R_COMPILE 1
 #endif
 
 #include "../liblber/lber-int.h"
@@ -285,9 +285,10 @@ struct ldapoptions {
    	int			ldo_tls_require_cert;
 	int			ldo_tls_impl;
    	int			ldo_tls_crlcheck;
+	int			ldo_tls_require_san;
 	char		*ldo_tls_pin_hashalg;
 	struct berval	ldo_tls_pin;
-#define LDAP_LDO_TLS_NULLARG ,0,0,0,{0,0,0,0,0,0,0,0,0},0,0,0,0,0,{0,0}
+#define LDAP_LDO_TLS_NULLARG ,0,0,0,{0,0,0,0,0,0,0,0,0},0,0,0,0,0,0,{0,0}
 #else
 #define LDAP_LDO_TLS_NULLARG
 #endif

@@ -1713,7 +1713,7 @@ static ConfigDriver	ag_cfgen;
 static ConfigTable agcfg[] = {
 	{ "autogroup-attrset", "group-oc> <URL-ad> <member-ad",
 		4, 4, 0, ARG_MAGIC|AG_ATTRSET, ag_cfgen,
-		"( OLcfgCtAt:2.1 NAME 'olcAGattrSet' "
+		"( OLcfgCtAt:2.1 NAME ( 'olcAutoGroupAttrSet' 'olcAGattrSet' ) "
 			"DESC 'Automatic groups: <group objectClass>, <URL attributeDescription>, <member attributeDescription>' "
 			"EQUALITY caseIgnoreMatch "
 			"SYNTAX OMsDirectoryString "
@@ -1722,7 +1722,7 @@ static ConfigTable agcfg[] = {
 	
 	{ "autogroup-memberof-ad", "memberOf attribute",
 		2, 2, 0, ARG_MAGIC|AG_MEMBER_OF_AD, ag_cfgen,
-		"( OLcfgCtAt:2.2 NAME 'olcAGmemberOfAd' "
+		"( OLcfgCtAt:2.2 NAME ( 'olcAutoGroupMemberOfAd' 'olcAGmemberOfAd' ) "
 			"DESC 'memberOf attribute' "
 			"EQUALITY caseIgnoreMatch "
 			"SYNTAX OMsDirectoryString SINGLE-VALUE )",
@@ -1733,12 +1733,12 @@ static ConfigTable agcfg[] = {
 
 static ConfigOCs agocs[] = {
 	{ "( OLcfgCtOc:2.1 "
-		"NAME 'olcAutomaticGroups' "
+		"NAME 'olcAutoGroupConfig' "
 		"DESC 'Automatic groups configuration' "
 		"SUP olcOverlayConfig "
 		"MAY ( "
-			"olcAGattrSet "
-			"$ olcAGmemberOfAd "
+			"olcAutoGroupAttrSet "
+			"$ olcAutoGroupMemberOfAd "
 		    ")"
 	  ")",
 		Cft_Overlay, agcfg, NULL, NULL },
@@ -2207,6 +2207,7 @@ autogroup_initialize(void)
 	int		rc = 0;
 	autogroup.on_bi.bi_type = "autogroup";
 
+	autogroup.on_bi.bi_flags = SLAPO_BFLAG_SINGLE;
 	autogroup.on_bi.bi_db_open = autogroup_db_open;
 	autogroup.on_bi.bi_db_close = autogroup_db_close;
 	autogroup.on_bi.bi_db_destroy = autogroup_db_destroy;

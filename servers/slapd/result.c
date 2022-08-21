@@ -43,7 +43,7 @@
 	char timestr[64]; \
 	(void) gettimeofday( &now, NULL ); \
 	now.tv_sec -= op->o_time; \
-	now.tv_usec -= op->o_tincr; \
+	now.tv_usec -= op->o_tusec; \
 	if ( now.tv_usec < 0 ) { \
 		--now.tv_sec; now.tv_usec += 1000000; \
 	} \
@@ -339,6 +339,7 @@ static long send_ldap_ber(
 	ber_len_t bytes;
 	long ret = 0;
 	char *close_reason;
+	int do_resume = 0;
 
 	ber_get_option( ber, LBER_OPT_BER_BYTES_TO_WRITE, &bytes );
 
@@ -374,6 +375,7 @@ static long send_ldap_ber(
 	/* write the pdu */
 	while( 1 ) {
 		int err;
+		char ebuf[128];
 
 		if ( ber_flush2( conn->c_sb, ber, LBER_FLUSH_FREE_NEVER ) == 0 ) {
 			ret = bytes;
@@ -389,7 +391,7 @@ static long send_ldap_ber(
 		 */
 
 		Debug( LDAP_DEBUG_CONNS, "ber_flush2 failed errno=%d reason=\"%s\"\n",
-		    err, sock_errstr(err) );
+		    err, sock_errstr(err, ebuf, sizeof(ebuf)) );
 
 		if ( err != EWOULDBLOCK && err != EAGAIN ) {
 			close_reason = "connection lost on write";
@@ -404,6 +406,7 @@ fail:
 		}
 
 		/* wait for socket to be write-ready */
+		do_resume = 1;
 		conn->c_writewaiter = 1;
 		ldap_pvt_thread_mutex_unlock( &conn->c_write1_mutex );
 		ldap_pvt_thread_pool_idle( &connection_pool );
@@ -431,14 +434,23 @@ fail:
 
 	conn->c_writing = 0;
 	if ( conn->c_writers < 0 ) {
+		/* shutting down, don't resume any ops */
+		do_resume = 0;
 		conn->c_writers++;
 		if ( !conn->c_writers )
 			ldap_pvt_thread_cond_signal( &conn->c_write1_cv );
 	} else {
 		conn->c_writers--;
+		/* other writers are waiting, don't resume any ops */
+		if ( conn->c_writers )
+			do_resume = 0;
 		ldap_pvt_thread_cond_signal( &conn->c_write1_cv );
 	}
 	ldap_pvt_thread_mutex_unlock( &conn->c_write1_mutex );
+
+	/* If there are no more writers, release a pending op */
+	if ( do_resume )
+		connection_write_resume( conn );
 
 	return ret;
 }

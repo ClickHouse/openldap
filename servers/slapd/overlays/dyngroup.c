@@ -123,7 +123,7 @@ static int dgroup_cf( ConfigArgs *c )
 static ConfigTable dgroupcfg[] = {
 	{ "attrpair", "member-attribute> <URL-attribute", 3, 3, 0,
 	  ARG_MAGIC, dgroup_cf,
-	  "( OLcfgOvAt:17.1 NAME 'olcDGAttrPair' "
+	  "( OLcfgOvAt:17.1 NAME ( 'olcDynGroupAttrPair' 'olcDGAttrPair' ) "
 	  "EQUALITY caseIgnoreMatch "
 	  "DESC 'Member and MemberURL attribute pair' "
 	  "SYNTAX OMsDirectoryString )", NULL, NULL },
@@ -132,10 +132,10 @@ static ConfigTable dgroupcfg[] = {
 
 static ConfigOCs dgroupocs[] = {
 	{ "( OLcfgOvOc:17.1 "
-	  "NAME 'olcDGConfig' "
+	  "NAME ( 'olcDynGroupConfig' 'olcDGConfig' ) "
 	  "DESC 'Dynamic Group configuration' "
 	  "SUP olcOverlayConfig "
-	  "MAY olcDGAttrPair )",
+	  "MAY olcDynGroupAttrPair)",
 	  Cft_Overlay, dgroupcfg },
 	{ NULL, 0, NULL }
 };
@@ -208,6 +208,7 @@ int dyngroup_initialize() {
 	int code;
 
 	dyngroup.on_bi.bi_type = "dyngroup";
+	dyngroup.on_bi.bi_flags = SLAPO_BFLAG_SINGLE;
 	dyngroup.on_bi.bi_db_destroy = dyngroup_destroy;
 	dyngroup.on_response = dyngroup_response;
 

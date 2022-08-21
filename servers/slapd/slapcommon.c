@@ -294,6 +294,8 @@ slap_tool_init(
 	ldif_debug = slap_debug;
 #endif
 	ldap_syslog = 0;
+	/* make sure libldap gets init'd */
+	ldap_set_option( NULL, LDAP_OPT_DEBUG_LEVEL, &slap_debug );
 
 #ifdef CSRIMALLOC
 	leakfilename = malloc( strlen( progname ) + STRLENOF( ".leak" ) + 1 );
@@ -799,7 +801,7 @@ slap_tool_init(
 			break;
 		}
 
-		/* If the named base is a glue master, operate on the
+		/* If the named base is a glue primary, operate on the
 		 * entire context
 		 */
 		if ( SLAP_GLUE_INSTANCE( be ) ) {
@@ -827,7 +829,7 @@ slap_tool_init(
 				continue;
 
 		/* If just doing the first by default and it is a
-		 * glue subordinate, find the master.
+		 * glue subordinate, find the primary.
 		 */
 			if ( SLAP_GLUE_SUBORDINATE(be) ) {
 				nosubordinates = 1;
