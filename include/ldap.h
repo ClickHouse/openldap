@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  * 
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -132,8 +132,6 @@ LDAP_BEGIN_DECL
 #define	LDAP_OPT_CONNECT_CB			0x5011	/* connection callbacks */
 #define	LDAP_OPT_SESSION_REFCNT		0x5012	/* session reference count */
 #define	LDAP_OPT_KEEPCONN		0x5013	/* keep the connection on read error or NoD */
-#define	LDAP_OPT_SOCKET_BIND_ADDRESSES	0x5014	/* user configured bind IPs */
-#define	LDAP_OPT_TCP_USER_TIMEOUT	0x5015	/* set TCP_USER_TIMEOUT if the OS supports it, ignored otherwise */
 
 /* OpenLDAP TLS options */
 #define LDAP_OPT_X_TLS				0x6000
@@ -163,7 +161,6 @@ LDAP_BEGIN_DECL
 #define LDAP_OPT_X_TLS_KEY			0x6018
 #define LDAP_OPT_X_TLS_PEERKEY_HASH	0x6019
 #define LDAP_OPT_X_TLS_REQUIRE_SAN	0x601a
-#define LDAP_OPT_X_TLS_PROTOCOL_MAX	0x601b
 
 #define LDAP_OPT_X_TLS_NEVER	0
 #define LDAP_OPT_X_TLS_HARD		1
@@ -175,14 +172,13 @@ LDAP_BEGIN_DECL
 #define LDAP_OPT_X_TLS_CRL_PEER	1
 #define LDAP_OPT_X_TLS_CRL_ALL	2
 
-/* for LDAP_OPT_X_TLS_PROTOCOL_MIN/MAX */
+/* for LDAP_OPT_X_TLS_PROTOCOL_MIN */
 #define LDAP_OPT_X_TLS_PROTOCOL(maj,min)	(((maj) << 8) + (min))
 #define LDAP_OPT_X_TLS_PROTOCOL_SSL2		(2 << 8)
 #define LDAP_OPT_X_TLS_PROTOCOL_SSL3		(3 << 8)
 #define LDAP_OPT_X_TLS_PROTOCOL_TLS1_0		((3 << 8) + 1)
 #define LDAP_OPT_X_TLS_PROTOCOL_TLS1_1		((3 << 8) + 2)
 #define LDAP_OPT_X_TLS_PROTOCOL_TLS1_2		((3 << 8) + 3)
-#define LDAP_OPT_X_TLS_PROTOCOL_TLS1_3		((3 << 8) + 4)
 
 #define LDAP_OPT_X_SASL_CBINDING_NONE		0
 #define LDAP_OPT_X_SASL_CBINDING_TLS_UNIQUE	1
@@ -273,8 +269,8 @@ typedef struct ldapcontrol {
 /*	non-standard track controls */
 #define LDAP_CONTROL_PAGEDRESULTS	"1.2.840.113556.1.4.319"   /* RFC 2696 */
 
-#define LDAP_CONTROL_AUTHZID_REQUEST	"2.16.840.1.113730.3.4.16"   /* RFC 3829 */
-#define LDAP_CONTROL_AUTHZID_RESPONSE   "2.16.840.1.113730.3.4.15"   /* RFC 3829 */
+#define LDAP_CONTROL_AUTHZID_REQUEST	"2.16.840.1.113730.4.16"   /* RFC 3829 */
+#define LDAP_CONTROL_AUTHZID_RESPONSE   "2.16.840.1.113730.4.15"   /* RFC 3829 */
 
 /* LDAP Content Synchronization Operation -- RFC 4533 */
 #define LDAP_SYNC_OID			"1.3.6.1.4.1.4203.1.9.1"

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2015-2022 The OpenLDAP Foundation.
+ * Copyright 2015-2020 The OpenLDAP Foundation.
  * Portions Copyright 2015 by Howard Chu, Symas Corp.
  * All rights reserved.
  *
@@ -92,7 +92,7 @@ static void HMAC_CTX_free(HMAC_CTX *ctx)
 #endif
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 
 static LUTIL_PASSWD_CHK_FUNC chk_totp1, chk_totp256, chk_totp512,
 	chk_totp1andpw, chk_totp256andpw, chk_totp512andpw;

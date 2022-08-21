@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2022 The OpenLDAP Foundation.
+ * Copyright 2002-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,19 +23,21 @@
 
 #include <stdio.h>
 #include "back-wt.h"
-#include "slap-config.h"
+#include "config.h"
 
 int
 wt_bind( Operation *op, SlapReply *rs )
 {
     struct wt_info *wi = (struct wt_info *) op->o_bd->be_private;
+	WT_SESSION *session;
 	wt_ctx *wc;
 	int rc;
 	Entry *e = NULL;
 	Attribute *a;
 	AttributeDescription *password = slap_schema.si_ad_userPassword;
 
-    Debug( LDAP_DEBUG_ARGS, "==> wt_bind: dn: %s\n",
+    Debug( LDAP_DEBUG_ARGS,
+		   "==> " LDAP_XSTRING(wt_bind) ": dn: %s\n",
 		   op->o_req_dn.bv_val );
 
 	/* allow noauth binds */
@@ -57,7 +59,8 @@ wt_bind( Operation *op, SlapReply *rs )
 	wc = wt_ctx_get(op, wi);
 	if( !wc ){
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_bind: wt_ctx_get failed\n" );
+			   LDAP_XSTRING(wt_bind)
+			   ": wt_ctx_get failed\n" );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "internal error";
         send_ldap_result( op, rs );

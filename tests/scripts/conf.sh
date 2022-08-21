@@ -2,7 +2,7 @@
 # $OpenLDAP$
 ## This work is part of OpenLDAP Software <http://www.openldap.org/>.
 ##
-## Copyright 1998-2022 The OpenLDAP Foundation.
+## Copyright 1998-2020 The OpenLDAP Foundation.
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -29,24 +29,21 @@ sed -e "s/@BACKEND@/${BACKEND}/"			\
 	-e "s/@RELAY@/${RELAY}/"			\
 	-e "s/^#relay-${RELAY}#//"			\
 	-e "s/^#${BACKENDTYPE}#//"			\
-	-e "s/^#${AC_TLS_TYPE}#//"			\
 	-e "s/^#${AC_ldap}#//"				\
 	-e "s/^#${AC_meta}#//"				\
 	-e "s/^#${AC_asyncmeta}#//"			\
 	-e "s/^#${AC_relay}#//"				\
 	-e "s/^#${AC_sql}#//"				\
-	-e "s/^#${RDBMS}#//"			\
+		-e "s/^#${RDBMS}#//"			\
 	-e "s/^#${AC_accesslog}#//"			\
+	-e "s/^#${AC_autoca}#//"			\
 	-e "s/^#${AC_dds}#//"				\
-	-e "s/^#${AC_deref}#//"				\
 	-e "s/^#${AC_dynlist}#//"			\
-	-e "s/^#${AC_homedir}#//"			\
 	-e "s/^#${AC_memberof}#//"			\
 	-e "s/^#${AC_pcache}#//"			\
 	-e "s/^#${AC_ppolicy}#//"			\
 	-e "s/^#${AC_refint}#//"			\
 	-e "s/^#${AC_retcode}#//"			\
-	-e "s/^#${AC_remoteauth}#//"			\
 	-e "s/^#${AC_rwm}#//"				\
 	-e "s/^#${AC_syncprov}#//"			\
 	-e "s/^#${AC_translucent}#//"			\
@@ -94,5 +91,4 @@ sed -e "s/@BACKEND@/${BACKEND}/"			\
 	-e "s;@KRB5REALM@;${KRB5REALM};"		\
 	-e "s;@KDCHOST@;${KDCHOST};"			\
 	-e "s;@KDCPORT@;${KDCPORT};"			\
-	-e "s;@TIMEOUT@;${TIMEOUT};"			\
 	-e "/^#/d"

@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2022 The OpenLDAP Foundation.
+ * Copyright 1999-2020 The OpenLDAP Foundation.
  * Portions Copyright 1999 Dmitry Kovalev.
  * Portions Copyright 2002 Pierangelo Masarati.
  * Portions Copyright 2004 Mark Adamson.
@@ -949,7 +949,7 @@ backsql_id2entry( backsql_srch_info *bsi, backsql_entryID *eid )
 	{
 		Debug( LDAP_DEBUG_TRACE, "backsql_id2entry(): "
 			"retrieving all attributes\n" );
-		ldap_avl_apply( bsi->bsi_oc->bom_attrs, backsql_get_attr_vals,
+		avl_apply( bsi->bsi_oc->bom_attrs, backsql_get_attr_vals,
 				bsi, 0, AVL_INORDER );
 
 	} else {

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * Portions Copyright 1998-2003 Kurt D. Zeilenga.
  * Portions Copyright 2003 IBM Corporation.
  * All rights reserved.
@@ -17,7 +17,7 @@
  */
 /* ACKNOWLEDGEMENTS:
  * This work was initially developed by Kurt Zeilenga for inclusion
- * in OpenLDAP Software.  Additional significant contributors include
+ * in OpenLDAP Software.  Additional signficant contributors include
  *    Jong Hyuk Choi
  *    Hallvard B. Furuseth
  *    Howard Chu
@@ -39,7 +39,6 @@
 #include "ldif.h"
 
 tool_vars tool_globals;
-enum slaptool slapTool;
 
 #ifdef CSRIMALLOC
 static char *leakfilename;
@@ -90,11 +89,6 @@ usage( int tool, const char *progname )
 
 	case SLAPINDEX:
 		options = " [-c]\n\t[-g] [-n databasenumber | -b suffix] [attr ...] [-q] [-t]\n";
-		break;
-
-	case SLAPMODIFY:
-		options = " [-c]\n\t[-g] [-n databasenumber | -b suffix]\n"
-			"\t[-l ldiffile] [-j linenumber] [-q] [-u] [-s] [-w]\n";
 		break;
 
 	case SLAPTEST:
@@ -672,7 +666,6 @@ slap_tool_init(
 	 * initialize stuff and figure out which backend we're dealing with
 	 */
 
-	slapTool = tool;
 	rc = slap_init( mode, progname );
 	if ( rc != 0 ) {
 		fprintf( stderr, "%s: slap_init failed!\n", progname );

@@ -1,5 +1,5 @@
 .TH SLAPO_PPOLICY 5 "RELEASEDATE" "OpenLDAP LDVERSION"
-.\" Copyright 2004-2022 The OpenLDAP Foundation All Rights Reserved.
+.\" Copyright 2004-2020 The OpenLDAP Foundation All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
 .\" $OpenLDAP$
 .SH NAME
@@ -124,17 +124,6 @@ object class.  The definition of that class is as follows:
         pwdSafeModify $ pwdMaxRecordedFailure $
         pwdMinDelay $ pwdMaxDelay $ pwdMaxIdle ) )
 .RE
-
-The
-.B pwdPolicy
-class is not structural, and so entries using it require another,
-structural, object class.  The
-.B namedPolicy
-object class is a good choice.
-.B namedPolicy
-requires a
-.B cn
-attribute, suitable as the policy entry's rDN.
 
 This implementation also provides an additional
 .B pwdPolicyChecker
@@ -266,7 +255,7 @@ When syntax checking is enabled
 (see also the
 .B pwdCheckQuality
 attribute), this attribute contains the minimum
-length in bytes that will be accepted in a password. If this
+number of characters that will be accepted in a password. If this
 attribute is not present, minimum password length is not
 enforced. If the server is unable to check the length of the password,
 whether due to a client-side hashed password or some other reason,
@@ -278,9 +267,7 @@ without checking it (if
 .B pwdCheckQuality
 is zero (0) or one (1)) or refuse it (if
 .B pwdCheckQuality
-is two (2)). If the number of characters should be enforced with regards
-to a particular encoding, the use of an appropriate pwdCheckModule is
-required.
+is two (2)).
 .LP
 .RS 4
 (  1.3.6.1.4.1.42.2.27.8.1.6
@@ -296,7 +283,7 @@ When syntax checking is enabled
 (see also the
 .B pwdCheckQuality
 attribute), this attribute contains the maximum
-length in bytes that will be accepted in a password. If this
+number of characters that will be accepted in a password. If this
 attribute is not present, maximum password length is not
 enforced. If the server is unable to check the length of the password,
 whether due to a client-side hashed password or some other reason,
@@ -308,9 +295,7 @@ without checking it (if
 .B pwdCheckQuality
 is zero (0) or one (1)) or refuse it (if
 .B pwdCheckQuality
-is two (2)). If the number of characters should be enforced with regards
-to a particular encoding, the use of an appropriate pwdCheckModule is
-required.
+is two (2)).
 .LP
 .RS 4
 (  1.3.6.1.4.1.42.2.27.8.1.31
@@ -757,6 +742,7 @@ policy rules will be enforced.
    EQUALITY distinguishedNameMatch
    SYNTAX 1.3.6.1.4.1.1466.115.121.1.12
    SINGLE\-VALUE
+   NO\-USER\-MODIFICATION
    USAGE directoryOperation)
 .RE
 
@@ -801,6 +787,7 @@ password policy attribute is set to "TRUE".
    EQUALITY generalizedTimeMatch
    ORDERING generalizedTimeOrderingMatch
    SINGLE\-VALUE
+   NO\-USER\-MODIFICATION
    USAGE directoryOperation)
 .RE
 
@@ -956,6 +943,7 @@ applies.
    ORDERING generalizedTimeOrderingMatch
    SYNTAX 1.3.6.1.4.1.1466.115.121.1.24
    SINGLE\-VALUE
+   NO\-USER\-MODIFICATION
    USAGE directoryOperation )
 .RE
 
@@ -974,6 +962,7 @@ attribute does not exist, then this restriction does not apply.
    ORDERING generalizedTimeOrderingMatch
    SYNTAX 1.3.6.1.4.1.1466.115.121.1.24
    SINGLE\-VALUE
+   NO\-USER\-MODIFICATION
    USAGE directoryOperation )
 .RE
 

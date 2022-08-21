@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,8 @@
 
 LDAP_BEGIN_DECL
 
-struct config_args_s;	/* slap-config.h */
-struct config_reply_s;	/* slap-config.h */
+struct config_args_s;	/* config.h */
+struct config_reply_s;	/* config.h */
 
 /*
  * aci.c
@@ -800,7 +800,6 @@ LDAP_SLAPD_F (Connection *) connection_init LDAP_P((
 	struct berval *id
 	LDAP_PF_LOCAL_SENDMSG_ARG(struct berval *peerbv)));
 
-LDAP_SLAPD_F (void) operation_counter_init LDAP_P(( Operation *op, void *threadctx ));
 LDAP_SLAPD_F (void) connection_closing LDAP_P((
 	Connection *c, const char *why ));
 LDAP_SLAPD_F (int) connection_is_active LDAP_P(( ber_socket_t s ));
@@ -810,7 +809,7 @@ LDAP_SLAPD_F (const char *) connection_state2str LDAP_P(( int state ))
 
 LDAP_SLAPD_F (int) connection_read_activate LDAP_P((ber_socket_t s));
 LDAP_SLAPD_F (int) connection_write LDAP_P((ber_socket_t s));
-LDAP_SLAPD_F (void) connection_write_resume LDAP_P((Connection *c));
+LDAP_SLAPD_F (int) connection_write_resume LDAP_P((Connection *c));
 
 LDAP_SLAPD_F (void) connection_op_finish LDAP_P((
 	Operation *op ));
@@ -895,6 +894,7 @@ LDAP_SLAPD_F (void) slap_resume_listeners LDAP_P((void));
 
 LDAP_SLAPD_F (int) slap_pause_server LDAP_P((void));
 LDAP_SLAPD_F (int) slap_unpause_server LDAP_P((void));
+LDAP_SLAPD_F (void) slap_sockaddrstr LDAP_P((Sockaddr *sa, struct berval *));
 
 LDAP_SLAPD_F (void) slapd_set_write LDAP_P((ber_socket_t s, int wake));
 LDAP_SLAPD_F (void) slapd_clr_write LDAP_P((ber_socket_t s, int wake));
@@ -928,9 +928,6 @@ LDAP_SLAPD_V (SOCKET *) slapd_ws_sockets;
 #define	SLAP_SOCK2FD(s)	s
 #define	SLAP_SOCKNEW(s)	s
 #endif
-
-LDAP_SLAPD_V (ldap_pvt_thread_mutex_t) slapd_init_mutex;
-LDAP_SLAPD_V (ldap_pvt_thread_cond_t) slapd_init_cond;
 
 /*
  * dn.c
@@ -1253,8 +1250,6 @@ LDAP_SLAPD_F (int)
 parse_syslog_user LDAP_P(( const char *arg, int *syslogUser ));
 LDAP_SLAPD_F (int)
 parse_debug_unknowns LDAP_P(( char **unknowns, int *levelp ));
-LDAP_SLAPD_F (void)
-slap_check_unknown_level LDAP_P(( char *levelstr, int level ));
 
 /*
  * matchedValues.c
@@ -1561,11 +1556,6 @@ LDAP_SLAPD_F (void) slap_passwd_init (void);
  * phonetic.c
  */
 LDAP_SLAPD_F (char *) phonetic LDAP_P(( char *s ));
-
-/*
- * proxyp.c
- */
-LDAP_SLAPD_F (int) proxyp LDAP_P((ber_socket_t sfd, Sockaddr *from));
 
 /*
  * referral.c
@@ -2071,7 +2061,6 @@ LDAP_SLAPD_V (ber_len_t) sockbuf_max_incoming;
 LDAP_SLAPD_V (ber_len_t) sockbuf_max_incoming_auth;
 LDAP_SLAPD_V (int)		slap_conn_max_pending;
 LDAP_SLAPD_V (int)		slap_conn_max_pending_auth;
-LDAP_SLAPD_V (int)		slap_max_filter_depth;
 
 LDAP_SLAPD_V (slap_mask_t)	global_allows;
 LDAP_SLAPD_V (slap_mask_t)	global_disallows;

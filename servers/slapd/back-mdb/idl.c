@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2022 The OpenLDAP Foundation.
+ * Copyright 2000-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -91,7 +91,7 @@ unsigned mdb_idl_search( ID *ids, ID id )
 	/*
 	 * binary search of id in ids
 	 * if found, returns position of id
-	 * if not found, returns first position greater than id
+	 * if not found, returns first postion greater than id
 	 */
 	unsigned base = 0;
 	unsigned cursor = 1;
@@ -1189,7 +1189,7 @@ mdb_idl_sort( ID *ids, ID *tmp )
         np = num;
         for ( i = BUCKETS; i > 0; --i ) *np++ = 0;
 
-		/* count occurrences of every byte value */
+		/* count occurences of every byte value */
 		bp = source_start;
         for ( i = size; i > 0; --i, bp += sizeof(ID) )
 				num[*bp]++;

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2022 The OpenLDAP Foundation.
+ * Copyright 2016-2020 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -28,7 +28,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "../back-ldap/back-ldap.h"
 #include "back-asyncmeta.h"
 
@@ -149,10 +149,6 @@ asyncmeta_back_db_init(
 	mi->mi_nretries = META_RETRY_DEFAULT;
 	mi->mi_version = LDAP_VERSION3;
 
-	for ( i = 0; i < SLAP_OP_LAST; i++ ) {
-		mi->mi_timeout[ i ] = META_BACK_CFG_DEFAULT_OPS_TIMEOUT;
-	}
-
 	for ( i = LDAP_BACK_PCONN_FIRST; i < LDAP_BACK_PCONN_LAST; i++ ) {
 		mi->mi_conn_priv[ i ].mic_num = 0;
 		LDAP_TAILQ_INIT( &mi->mi_conn_priv[ i ].mic_priv );
@@ -271,7 +267,7 @@ asyncmeta_back_db_open(
 	}
 	mi->mi_suffix = be->be_suffix[0];
 	ldap_pvt_thread_mutex_lock( &slapd_rq.rq_mutex );
-	mi->mi_task = ldap_pvt_runqueue_insert( &slapd_rq, 1,
+	mi->mi_task = ldap_pvt_runqueue_insert( &slapd_rq, 0,
 		asyncmeta_timeout_loop, mi, "asyncmeta_timeout_loop", mi->mi_suffix.bv_val );
 	ldap_pvt_thread_mutex_unlock( &slapd_rq.rq_mutex );
 	return 0;
@@ -436,7 +432,7 @@ asyncmeta_back_db_destroy(
 
 		ldap_pvt_thread_mutex_lock( &mi->mi_cache.mutex );
 		if ( mi->mi_cache.tree ) {
-			ldap_avl_free( mi->mi_cache.tree, asyncmeta_dncache_free );
+			avl_free( mi->mi_cache.tree, asyncmeta_dncache_free );
 		}
 
 		ldap_pvt_thread_mutex_unlock( &mi->mi_cache.mutex );

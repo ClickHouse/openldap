@@ -29,7 +29,7 @@
 
 #include "lutil.h"
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 
 /*
  * This overlay limits the values which can be placed into an
@@ -40,7 +40,6 @@
  */
 
 #define REGEX_STR "regex"
-#define NEG_REGEX_STR "negregex"
 #define URI_STR "uri"
 #define SET_STR "set"
 #define SIZE_STR "size"
@@ -80,7 +79,6 @@ enum {
 	CONSTRAINT_COUNT,
 	CONSTRAINT_SIZE,
 	CONSTRAINT_REGEX,
-	CONSTRAINT_NEG_REGEX,
 	CONSTRAINT_SET,
 	CONSTRAINT_URI,
 };
@@ -88,7 +86,7 @@ enum {
 static ConfigDriver constraint_cf_gen;
 
 static ConfigTable constraintcfg[] = {
-	{ "constraint_attribute", "attribute[list]> (regex|negregex|uri|set|size|count) <value> [<restrict URI>]",
+	{ "constraint_attribute", "attribute[list]> (regex|uri|set|size|count) <value> [<restrict URI>]",
 	  4, 0, 0, ARG_MAGIC | CONSTRAINT_ATTRIBUTE, constraint_cf_gen,
 	  "( OLcfgOvAt:13.1 NAME 'olcConstraintAttribute' "
 	  "DESC 'constraint for list of attributes' "
@@ -177,10 +175,6 @@ constraint_cf_gen( ConfigArgs *c )
 						break;
 					case CONSTRAINT_REGEX:
 						tstr = REGEX_STR;
-						quotes = 1;
-						break;
-					case CONSTRAINT_NEG_REGEX:
-						tstr = NEG_REGEX_STR;
 						quotes = 1;
 						break;
 					case CONSTRAINT_SET:
@@ -302,12 +296,10 @@ constraint_cf_gen( ConfigArgs *c )
 				}
 			}
 
-			int is_regex = strcasecmp( c->argv[2], REGEX_STR ) == 0;
-			int is_neg_regex = strcasecmp( c->argv[2], NEG_REGEX_STR ) == 0;
-			if ( is_regex || is_neg_regex ) {
+			if ( strcasecmp( c->argv[2], REGEX_STR ) == 0) {
 				int err;
 			
-				ap.type = is_regex ? CONSTRAINT_REGEX : CONSTRAINT_NEG_REGEX;
+				ap.type = CONSTRAINT_REGEX;
 				ap.re = ch_malloc( sizeof(regex_t) );
 				if ((err = regcomp( ap.re,
 					c->argv[3], REG_EXTENDED )) != 0) {
@@ -537,8 +529,8 @@ constraint_cf_gen( ConfigArgs *c )
 
 done:;
 			if ( rc == LDAP_SUCCESS ) {
-				constraint **app, *a2 = ch_calloc( sizeof(constraint), 1 );
-
+				constraint *a2 = ch_calloc( sizeof(constraint), 1 );
+				a2->ap_next = on->on_bi.bi_private;
 				a2->ap = ap.ap;
 				a2->type = ap.type;
 				a2->re = ap.re;
@@ -556,12 +548,7 @@ done:;
 				a2->restrict_ndn = ap.restrict_ndn;
 				a2->restrict_filter = ap.restrict_filter;
 				a2->restrict_val = ap.restrict_val;
-
-				for ( app = &on->on_bi.bi_private; *app; app = &(*app)->ap_next )
-					/* Get to the end */ ;
-
-				a2->ap_next = *app;
-				*app = a2;
+				on->on_bi.bi_private = a2;
 
 			} else {
 				Debug( LDAP_DEBUG_CONFIG|LDAP_DEBUG_NONE,
@@ -609,10 +596,6 @@ constraint_violation( constraint *c, struct berval *bv, Operation *op )
 			break;
 		case CONSTRAINT_REGEX:
 			if (regexec(c->re, bv->bv_val, 0, NULL, 0) == REG_NOMATCH)
-				return LDAP_CONSTRAINT_VIOLATION; /* regular expression violation */
-			break;
-		case CONSTRAINT_NEG_REGEX:
-			if (regexec(c->re, bv->bv_val, 0, NULL, 0) != REG_NOMATCH)
 				return LDAP_CONSTRAINT_VIOLATION; /* regular expression violation */
 			break;
 		case CONSTRAINT_URI: {

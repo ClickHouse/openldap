@@ -1,5 +1,5 @@
 # $OpenLDAP$
-# Copyright 1999-2022 The OpenLDAP Foundation, All Rights Reserved.
+# Copyright 1999-2020 The OpenLDAP Foundation, All Rights Reserved.
 # COPYING RESTRICTIONS APPLY, see COPYRIGHT.
 
 H1: Access Control
@@ -1112,9 +1112,8 @@ You can restrict access based on the security strength factor (SSF)
 0 (zero) implies no protection,
 1 implies integrity protection only,
 56 DES or other weak ciphers,
-112 triple DES and similar ciphers,
-128 RC4, Blowfish and other similar ciphers,
-256 modern ciphers.
+112 triple DES and other strong ciphers,
+128 RC4, Blowfish and other modern strong ciphers.
 
 Other possibilities:
 

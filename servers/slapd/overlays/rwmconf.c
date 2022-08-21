@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2022 The OpenLDAP Foundation.
+ * Copyright 1999-2020 The OpenLDAP Foundation.
  * Portions Copyright 1999-2003 Howard Chu.
  * Portions Copyright 2000-2003 Pierangelo Masarati.
  * All rights reserved.
@@ -216,8 +216,8 @@ rwm_map_config(
 		mapping[1].m_src_ad = mapping[0].m_dst_ad;
 	}
 
-	if ( ( src[0] != '\0' && ldap_avl_find( map->map, (caddr_t)mapping, rwm_mapping_cmp ) != NULL)
-			|| ldap_avl_find( map->remap, (caddr_t)&mapping[1], rwm_mapping_cmp ) != NULL)
+	if ( ( src[0] != '\0' && avl_find( map->map, (caddr_t)mapping, rwm_mapping_cmp ) != NULL)
+			|| avl_find( map->remap, (caddr_t)&mapping[1], rwm_mapping_cmp ) != NULL)
 	{
 		Debug( LDAP_DEBUG_ANY,
 			"%s: line %d: duplicate mapping found.\n",
@@ -227,10 +227,10 @@ rwm_map_config(
 	}
 
 	if ( src[0] != '\0' ) {
-		ldap_avl_insert( &map->map, (caddr_t)&mapping[0],
+		avl_insert( &map->map, (caddr_t)&mapping[0],
 					rwm_mapping_cmp, rwm_mapping_dup );
 	}
-	ldap_avl_insert( &map->remap, (caddr_t)&mapping[1],
+	avl_insert( &map->remap, (caddr_t)&mapping[1],
 				rwm_mapping_cmp, rwm_mapping_dup );
 
 success_return:;

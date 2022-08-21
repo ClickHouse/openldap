@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -733,8 +733,6 @@ ldap_pvt_thread_pool_query(
 						break;
 					case LDAP_PVT_THREAD_POOL_PARAM_BACKLOAD:
 						count += pq->ltp_pending_count + pq->ltp_active_count;
-						break;
-					default:
 						break;
 				}
 				ldap_pvt_thread_mutex_unlock(&pq->ltp_mutex);

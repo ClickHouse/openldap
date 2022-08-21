@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2022 The OpenLDAP Foundation.
+ * Copyright 2005-2020 The OpenLDAP Foundation.
  * Portions copyright 2005 Symas Corporation.
  * All rights reserved.
  *
@@ -33,7 +33,7 @@
 #include <ac/ctype.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "lutil.h"
 
 #define	VALSORT_ASCEND	0
@@ -88,7 +88,7 @@ static Syntax *syn_numericString;
 static int
 valsort_cf_func(ConfigArgs *c) {
 	slap_overinst *on = (slap_overinst *)c->bi;
-	valsort_info vitmp, *vi, **vip;
+	valsort_info vitmp, *vi;
 	const char *text = NULL;
 	int i, is_numeric;
 	struct berval bv = BER_BVNULL;
@@ -200,14 +200,10 @@ valsort_cf_func(ConfigArgs *c) {
 			c->log, c->cr_msg, c->argv[1] );
 		return(1);
 	}
-
-	for ( vip = &on->on_bi.bi_private; *vip; vip = &(*vip)->vi_next )
-		/* Get to the end */ ;
-
 	vi = ch_malloc( sizeof(valsort_info) );
 	*vi = vitmp;
-	vi->vi_next = *vip;
-	*vip = vi;
+	vi->vi_next = on->on_bi.bi_private;
+	on->on_bi.bi_private = vi;
 	return 0;
 }
 

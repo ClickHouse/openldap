@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * Portions Copyright 2000 Mark Adamson, Carnegie Mellon.
  * All rights reserved.
  *
@@ -28,7 +28,7 @@
 #include "slap.h"
 
 #include "lutil.h"
-#include "slap-config.h"
+#include "config.h"
 
 #define SASLREGEX_REPLACE 10
 
@@ -154,9 +154,10 @@ int slap_parse_user( struct berval *id, struct berval *user,
 	user->bv_val++;
 	user->bv_len = id->bv_len - ( user->bv_val - id->bv_val );
 
-	if ( id->bv_val[1] == '.' ) {
-		id->bv_val[1] = '\0';
-		mech->bv_val = id->bv_val + 2;
+	mech->bv_val = ber_bvchr( id, '.' );
+	if ( !BER_BVISNULL( mech ) ) {
+		mech->bv_val[ 0 ] = '\0';
+		mech->bv_val++;
 		mech->bv_len = user->bv_val - mech->bv_val - 1;
 
 		realm->bv_val = ber_bvchr( mech, '/' );
@@ -169,7 +170,6 @@ int slap_parse_user( struct berval *id, struct berval *user,
 		}
 
 	} else {
-		BER_BVZERO( mech );
 		BER_BVZERO( realm );
 	}
 
@@ -178,16 +178,14 @@ int slap_parse_user( struct berval *id, struct berval *user,
 	}
 
 	if ( !BER_BVISNULL( mech ) ) {
-		if ( mech->bv_val != id->bv_val + 2 )
-			return LDAP_PROTOCOL_ERROR;
+		assert( mech->bv_val == id->bv_val + 2 );
 
 		AC_MEMCPY( mech->bv_val - 2, mech->bv_val, mech->bv_len + 1 );
 		mech->bv_val -= 2;
 	}
 
 	if ( !BER_BVISNULL( realm ) ) {
-		if ( realm->bv_val < id->bv_val + 2 )
-			return LDAP_PROTOCOL_ERROR;
+		assert( realm->bv_val >= id->bv_val + 2 );
 
 		AC_MEMCPY( realm->bv_val - 2, realm->bv_val, realm->bv_len + 1 );
 		realm->bv_val -= 2;
@@ -449,12 +447,9 @@ is_dn:		bv.bv_len = in->bv_len - ( bv.bv_val - in->bv_val );
 	}
 
 	/* Grab the searchbase */
-	if ( ludp->lud_dn != NULL ) {
-		ber_str2bv( ludp->lud_dn, 0, 0, &bv );
-		rc = dnValidate( NULL, &bv );
-	} else {
-		rc = LDAP_INVALID_SYNTAX;
-	}
+	assert( ludp->lud_dn != NULL );
+	ber_str2bv( ludp->lud_dn, 0, 0, &bv );
+	rc = dnValidate( NULL, &bv );
 
 done:
 	ldap_free_urldesc( ludp );
@@ -486,7 +481,6 @@ authzPrettyNormal(
 
 	assert( val != NULL );
 	assert( !BER_BVISNULL( val ) );
-	BER_BVZERO( normalized );
 
 	/*
 	 * 2) dn[.{exact|children|subtree|onelevel}]:{*|<DN>}
@@ -817,6 +811,7 @@ is_dn:		bv.bv_len = val->bv_len - ( bv.bv_val - val->bv_val );
 	}
 
 	/* Grab the searchbase */
+	assert( ludp->lud_dn != NULL );
 	if ( ludp->lud_dn ) {
 		struct berval	out = BER_BVNULL;
 
@@ -834,9 +829,6 @@ is_dn:		bv.bv_len = val->bv_len - ( bv.bv_val - val->bv_val );
 		}
 
 		ludp->lud_dn = out.bv_val;
-	} else {
-		rc = LDAP_INVALID_SYNTAX;
-		goto done;
 	}
 
 	ludp->lud_port = 0;
@@ -858,7 +850,7 @@ done:
 
 	if ( lud_dn ) {
 		if ( ludp->lud_dn != lud_dn ) {
-			slap_sl_free( ludp->lud_dn, ctx );
+			ber_memfree( ludp->lud_dn );
 		}
 		ludp->lud_dn = lud_dn;
 	}
@@ -905,7 +897,7 @@ authzPretty(
 	rc = authzPrettyNormal( val, out, ctx, 0 );
 
 	Debug( LDAP_DEBUG_TRACE, "<<< authzPretty: <%s> (%d)\n",
-		out->bv_val ? out->bv_val : "(null)" , rc );
+		out->bv_val, rc );
 
 	return rc;
 }

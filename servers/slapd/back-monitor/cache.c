@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2022 The OpenLDAP Foundation.
+ * Copyright 2001-2020 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -82,16 +82,19 @@ monitor_cache_add(
 	Entry		*e )
 {
 	monitor_cache_t	*mc;
+	monitor_entry_t	*mp;
 	int		rc;
 
 	assert( mi != NULL );
 	assert( e != NULL );
 
+	mp = ( monitor_entry_t *)e->e_private;
+
 	mc = ( monitor_cache_t * )ch_malloc( sizeof( monitor_cache_t ) );
 	mc->mc_ndn = e->e_nname;
 	mc->mc_e = e;
 	ldap_pvt_thread_mutex_lock( &mi->mi_cache_mutex );
-	rc = ldap_avl_insert( &mi->mi_cache, ( caddr_t )mc,
+	rc = avl_insert( &mi->mi_cache, ( caddr_t )mc,
 			monitor_cache_cmp, monitor_cache_dup );
 	ldap_pvt_thread_mutex_unlock( &mi->mi_cache_mutex );
 
@@ -153,7 +156,7 @@ monitor_cache_get(
 	tmp_mc.mc_ndn = *ndn;
 retry:;
 	ldap_pvt_thread_mutex_lock( &mi->mi_cache_mutex );
-	mc = ( monitor_cache_t * )ldap_avl_find( mi->mi_cache,
+	mc = ( monitor_cache_t * )avl_find( mi->mi_cache,
 			( caddr_t )&tmp_mc, monitor_cache_cmp );
 
 	if ( mc != NULL ) {
@@ -196,7 +199,7 @@ retry:;
 	ldap_pvt_thread_mutex_lock( &mi->mi_cache_mutex );
 
 	tmp_mc.mc_ndn = *ndn;
-	mc = ( monitor_cache_t * )ldap_avl_find( mi->mi_cache,
+	mc = ( monitor_cache_t * )avl_find( mi->mi_cache,
 			( caddr_t )&tmp_mc, monitor_cache_cmp );
 
 	if ( mc != NULL ) {
@@ -208,7 +211,7 @@ retry:;
 		}
 
 		tmp_mc.mc_ndn = pndn;
-		pmc = ( monitor_cache_t * )ldap_avl_find( mi->mi_cache,
+		pmc = ( monitor_cache_t * )avl_find( mi->mi_cache,
 			( caddr_t )&tmp_mc, monitor_cache_cmp );
 		if ( pmc != NULL ) {
 			monitor_entry_t	*mp = (monitor_entry_t *)mc->mc_e->e_private,
@@ -248,7 +251,7 @@ retry:;
 				monitor_cache_t *tmpmc;
 
 				tmp_mc.mc_ndn = *ndn;
-				tmpmc = ldap_avl_delete( &mi->mi_cache,
+				tmpmc = avl_delete( &mi->mi_cache,
 					( caddr_t )&tmp_mc, monitor_cache_cmp );
 				assert( tmpmc == mc );
 
@@ -367,7 +370,7 @@ monitor_cache_release(
 		/* volatile entries do not return to cache */
 		ldap_pvt_thread_mutex_lock( &mi->mi_cache_mutex );
 		tmp_mc.mc_ndn = e->e_nname;
-		mc = ldap_avl_delete( &mi->mi_cache,
+		mc = avl_delete( &mi->mi_cache,
 				( caddr_t )&tmp_mc, monitor_cache_cmp );
 		ldap_pvt_thread_mutex_unlock( &mi->mi_cache_mutex );
 		if ( mc != NULL ) {
@@ -430,7 +433,7 @@ monitor_cache_destroy(
 	monitor_info_t	*mi )
 {
 	if ( mi->mi_cache ) {
-		ldap_avl_free( mi->mi_cache, monitor_entry_destroy );
+		avl_free( mi->mi_cache, monitor_entry_destroy );
 	}
 
 	return 0;

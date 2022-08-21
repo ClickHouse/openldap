@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2022 The OpenLDAP Foundation.
+ * Copyright 2000-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 #include "back-mdb.h"
 #include "idl.h"
 
-#include "slap-config.h"
+#include "config.h"
 
 #include "lutil.h"
 #include "ldap_rq.h"
@@ -110,8 +110,7 @@ static ConfigTable mdbcfg[] = {
 		"( OLcfgDbAt:12.5 NAME 'olcDbRtxnSize' "
 		"DESC 'Number of entries to process in one read transaction' "
 		"EQUALITY integerMatch "
-		"SYNTAX OMsInteger SINGLE-VALUE )", NULL,
-		{ .v_uint = DEFAULT_RTXN_SIZE } },
+		"SYNTAX OMsInteger SINGLE-VALUE )", NULL, NULL },
 	{ "searchstack", "depth", 2, 2, 0, ARG_INT|ARG_MAGIC|MDB_SSTACK,
 		mdb_cf_gen, "( OLcfgDbAt:1.9 NAME 'olcDbSearchStack' "
 		"DESC 'Depth of search stack in IDLs' "
@@ -167,8 +166,7 @@ mdb_bk_cfg( ConfigArgs *c )
 		mdb_idl_reset();
 		c->bi->bi_private = 0;
 	} else {
-		/* with 32 bit ints, db_size max is 2^30 and um_size max is 2^31 */
-		if ( c->value_int >= MDB_IDL_LOGN && ( c->value_int < sizeof(int) * CHAR_BIT - 1 )) {
+		if ( c->value_int >= MDB_IDL_LOGN && c->value_int < sizeof(int) * CHAR_BIT ) {
 			MDB_idl_logn = c->value_int;
 			mdb_idl_reset();
 			c->bi->bi_private = (void *)8;	/* non-NULL to show we're using it */

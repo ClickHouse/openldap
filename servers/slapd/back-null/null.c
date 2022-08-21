@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2022 The OpenLDAP Foundation.
+ * Copyright 2002-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 #include <ac/string.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 
 typedef struct null_info {
 	int	ni_bind_allowed;

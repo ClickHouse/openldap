@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -110,6 +110,8 @@ ldap_get_option(
 	}
 
 	if(ld != NULL) {
+		assert( LDAP_VALID( ld ) );
+
 		if( !LDAP_VALID( ld ) ) {
 			return LDAP_OPT_ERROR;
 		}
@@ -255,17 +257,6 @@ ldap_get_option(
 
 	case LDAP_OPT_HOST_NAME:
 		* (char **) outvalue = ldap_url_list2hosts(lo->ldo_defludp);
-		rc = LDAP_OPT_SUCCESS;
-		break;
-
-	case LDAP_OPT_SOCKET_BIND_ADDRESSES:
-		if ( lo->ldo_local_ip_addrs.local_ip_addrs == NULL ) {
-			* (void **) outvalue = NULL;
-		}
-		else {
-			* (char **) outvalue =
-				LDAP_STRDUP( lo->ldo_local_ip_addrs.local_ip_addrs );
-		}
 		rc = LDAP_OPT_SUCCESS;
 		break;
 
@@ -415,11 +406,6 @@ ldap_get_option(
 
 	case LDAP_OPT_X_KEEPALIVE_INTERVAL:
 		* (int *) outvalue = lo->ldo_keepalive_interval;
-		rc = LDAP_OPT_SUCCESS;
-		break;
-
-	case LDAP_OPT_TCP_USER_TIMEOUT:
-		* (unsigned int *) outvalue = lo->ldo_tcp_user_timeout;
 		rc = LDAP_OPT_SUCCESS;
 		break;
 
@@ -606,43 +592,6 @@ ldap_set_option(
 				if (lo->ldo_defludp != NULL)
 					ldap_free_urllist(lo->ldo_defludp);
 				lo->ldo_defludp = ludlist;
-			}
-			break;
-		}
-
-	case LDAP_OPT_SOCKET_BIND_ADDRESSES: {
-			const char *source_ip = (const char *) invalue;
-			char **source_ip_lst = NULL;
-
-			ldapsourceip temp_source_ip;
-			memset( &temp_source_ip, 0, sizeof( ldapsourceip ) );
-			rc = LDAP_OPT_SUCCESS;
-			if( source_ip == NULL ) {
-				if ( ld->ld_options.ldo_local_ip_addrs.local_ip_addrs ) {
-					LDAP_FREE( ld->ld_options.ldo_local_ip_addrs.local_ip_addrs );
-					memset( &ld->ld_options.ldo_local_ip_addrs, 0,
-						sizeof( ldapsourceip ) );
-				}
-			}
-			else {
-				source_ip_lst = ldap_str2charray( source_ip, " " );
-
-				if ( source_ip_lst == NULL )
-					rc =  LDAP_NO_MEMORY;
-
-				if( rc == LDAP_OPT_SUCCESS ) {
-					rc = ldap_validate_and_fill_sourceip ( source_ip_lst,
-						&temp_source_ip );
-					ldap_charray_free( source_ip_lst );
-				}
-				if ( rc == LDAP_OPT_SUCCESS ) {
-					if ( lo->ldo_local_ip_addrs.local_ip_addrs != NULL ) {
-						LDAP_FREE( lo->ldo_local_ip_addrs.local_ip_addrs );
-						lo->ldo_local_ip_addrs.local_ip_addrs = NULL;
-					}
-					lo->ldo_local_ip_addrs = temp_source_ip;
-					lo->ldo_local_ip_addrs.local_ip_addrs = LDAP_STRDUP( source_ip );
-				}
 			}
 			break;
 		}
@@ -847,7 +796,6 @@ ldap_set_option(
 	case LDAP_OPT_X_KEEPALIVE_IDLE:
 	case LDAP_OPT_X_KEEPALIVE_PROBES :
 	case LDAP_OPT_X_KEEPALIVE_INTERVAL :
-	case LDAP_OPT_TCP_USER_TIMEOUT:
 		if(invalue == NULL) {
 			/* no place to set from */
 			LDAP_MUTEX_UNLOCK( &lo->ldo_mutex );
@@ -966,10 +914,6 @@ ldap_set_option(
 		break;
 	case LDAP_OPT_X_KEEPALIVE_INTERVAL :
 		lo->ldo_keepalive_interval = * (const int *) invalue;
-		rc = LDAP_OPT_SUCCESS;
-		break;
-	case LDAP_OPT_TCP_USER_TIMEOUT:
-		lo->ldo_tcp_user_timeout = * (const unsigned int *) invalue;
 		rc = LDAP_OPT_SUCCESS;
 		break;
 	

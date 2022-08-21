@@ -18,9 +18,6 @@
  * revision 42, as noted.
  *
  */
-
-#include "portable.h"
-
 #include <lber.h>
 #include <lber_pvt.h>
 #include "lutil.h"

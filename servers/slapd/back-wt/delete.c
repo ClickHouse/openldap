@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2022 The OpenLDAP Foundation.
+ * Copyright 2002-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
 #include <ac/string.h>
 
 #include "back-wt.h"
-#include "slap-config.h"
+#include "config.h"
 
 int
 wt_delete( Operation *op, SlapReply *rs )
@@ -44,11 +44,12 @@ wt_delete( Operation *op, SlapReply *rs )
 
 	wt_ctx *wc;
 	int rc;
+	WT_CURSOR *cursor = NULL;
 
 	int parent_is_glue = 0;
 	int parent_is_leaf = 0;
 
-	Debug( LDAP_DEBUG_ARGS, "==> wt_delete: %s\n",
+	Debug( LDAP_DEBUG_ARGS, "==> " LDAP_XSTRING(wt_delete) ": %s\n",
 		   op->o_req_dn.bv_val );
 
 	if( op->o_txnSpec && txn_preop( op, rs ))
@@ -59,7 +60,9 @@ wt_delete( Operation *op, SlapReply *rs )
 
 	wc = wt_ctx_get(op, wi);
 	if( !wc ){
-        Debug( LDAP_DEBUG_TRACE, "wt_delete: wt_ctx_get failed\n" );
+        Debug( LDAP_DEBUG_TRACE,
+			   LDAP_XSTRING(wt_delete)
+			   ": wt_ctx_get failed\n" );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "internal error";
 		goto return_results;
@@ -86,37 +89,26 @@ wt_delete( Operation *op, SlapReply *rs )
 	case WT_NOTFOUND:
 		break;
 	default:
+		/* TODO: error handling */
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "internal error";
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_delete: error at wt_dn2entry() rc=%d\n", rc );
+			   LDAP_XSTRING(wt_delete)
+			   ": error at wt_dn2entry() rc=%d\n",
+			   rc );
 		goto return_results;
 	}
 
 	if ( rc == WT_NOTFOUND && pdn.bv_len != 0 ) {
 		Debug( LDAP_DEBUG_ARGS,
-			   "<== wt_delete: parent not found %s\n", op->o_req_dn.bv_val );
-		rc = wt_dn2aentry(op->o_bd, wc, &op->o_req_ndn, &e);
-		Debug( LDAP_DEBUG_ARGS, "<== wt_delete: rc=%d\n", rc );
+			   "<== " LDAP_XSTRING(wt_delete) ": no such object %s\n",
+			   op->o_req_dn.bv_val );
 
-		switch( rc ) {
-		case 0:
-			break;
-		case WT_NOTFOUND:
-			rs->sr_err = LDAP_NO_SUCH_OBJECT;
-			goto return_results;
-		default:
-			Debug( LDAP_DEBUG_ANY, "wt_delete: wt_dn2aentry failed (%d)\n", rc );
-			rs->sr_err = LDAP_OTHER;
-			rs->sr_text = "internal error";
-			goto return_results;
-		}
-
-		if ( e && !BER_BVISEMPTY( &e->e_name )) {
-			rs->sr_matched = ch_strdup( e->e_name.bv_val );
-			if ( is_entry_referral( e )) {
-				BerVarray ref = get_entry_referrals( op, e );
-				rs->sr_ref = referral_rewrite( ref, &e->e_name,
+		if ( p && !BER_BVISEMPTY( &p->e_name )) {
+			rs->sr_matched = ch_strdup( p->e_name.bv_val );
+			if ( is_entry_referral( p )) {
+				BerVarray ref = get_entry_referrals( op, p );
+				rs->sr_ref = referral_rewrite( ref, &p->e_name,
 											   &op->o_req_dn, LDAP_SCOPE_DEFAULT );
 				ber_bvarray_free( ref );
 			} else {
@@ -138,36 +130,30 @@ wt_delete( Operation *op, SlapReply *rs )
 	case 0:
 		break;
 	case WT_NOTFOUND:
-		break;
+		Debug( LDAP_DEBUG_ARGS,
+			   "<== " LDAP_XSTRING(wt_delete)
+			   ": no such object %s\n",
+			   op->o_req_dn.bv_val );
+		rs->sr_err = LDAP_REFERRAL;
+		rs->sr_flags = REP_MATCHED_MUSTBEFREED | REP_REF_MUSTBEFREED;
+		goto return_results;
 	default:
+		/* TODO: error handling */
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "internal error";
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_delete: error at wt_dn2entry() rc=%d\n", rc );
+			   LDAP_XSTRING(wt_delete)
+			   ": error at wt_dn2entry() rc=%d\n",
+			   rc );
 		goto return_results;
 	}
 
 	/* FIXME : dn2entry() should return non-glue entry */
-	if (rc == WT_NOTFOUND ||
-		( !manageDSAit && e && is_entry_glue( e ) )) {
-		if ( !e ) {
-			Debug( LDAP_DEBUG_ARGS,
-				   "<== wt_delete: no such object %s\n",
-				   op->o_req_dn.bv_val);
-			rc = wt_dn2aentry(op->o_bd, wc, &op->o_req_ndn, &e);
-			switch( rc ) {
-			case 0:
-				break;
-			case WT_NOTFOUND:
-				rs->sr_err = LDAP_NO_SUCH_OBJECT;
-				goto return_results;
-			default:
-				Debug( LDAP_DEBUG_ANY, "wt_delete: wt_dn2aentry failed (%d)\n", rc );
-				rs->sr_err = LDAP_OTHER;
-				rs->sr_text = "internal error";
-				goto return_results;
-			}
-		}
+	if ( !manageDSAit && is_entry_glue( e ) ) {
+		Debug( LDAP_DEBUG_ARGS,
+			   "<== " LDAP_XSTRING(wt_delete)
+			   ": glue entry %s\n",
+			   op->o_req_dn.bv_val );
 
 		rs->sr_matched = ch_strdup( e->e_dn );
 		if ( is_entry_referral( e )) {
@@ -191,7 +177,8 @@ wt_delete( Operation *op, SlapReply *rs )
 
 		if ( !rs->sr_err  ) {
 			Debug( LDAP_DEBUG_TRACE,
-				   "<== wt_delete: no write access to parent\n" );
+				   "<== " LDAP_XSTRING(wt_delete) ": no write "
+				   "access to parent\n" );
 			rs->sr_err = LDAP_INSUFFICIENT_ACCESS;
 			rs->sr_text = "no write access to parent";
 			goto return_results;
@@ -212,7 +199,8 @@ wt_delete( Operation *op, SlapReply *rs )
 
 				if ( !rs->sr_err  ) {
 					Debug( LDAP_DEBUG_TRACE,
-						   "<== wt_delete: no access to parent\n" );
+						   "<== " LDAP_XSTRING(wt_delete)
+						   ": no access to parent\n" );
 					rs->sr_err = LDAP_INSUFFICIENT_ACCESS;
 					rs->sr_text = "no write access to parent";
 					goto return_results;
@@ -220,7 +208,8 @@ wt_delete( Operation *op, SlapReply *rs )
 
 			} else {
 				Debug( LDAP_DEBUG_TRACE,
-					   "<== wt_delete: no parent and not root\n" );
+					   "<== " LDAP_XSTRING(wt_delete)
+					   ": no parent and not root\n" );
 				rs->sr_err = LDAP_INSUFFICIENT_ACCESS;
 				goto return_results;
 			}
@@ -238,7 +227,8 @@ wt_delete( Operation *op, SlapReply *rs )
 								 entry, NULL, ACL_WDEL, NULL );
 	if ( !rs->sr_err  ) {
 		Debug( LDAP_DEBUG_TRACE,
-			   "<== wt_delete: no write access to entry\n" );
+			   "<== " LDAP_XSTRING(wt_delete) ": no write access "
+			   "to entry\n" );
 		rs->sr_err = LDAP_INSUFFICIENT_ACCESS;
 		rs->sr_text = "no write access to entry";
 		goto return_results;
@@ -248,7 +238,8 @@ wt_delete( Operation *op, SlapReply *rs )
 		/* entry is a referral, don't allow delete */
 		rs->sr_ref = get_entry_referrals( op, e );
 
-		Debug( LDAP_DEBUG_TRACE, "wt_delete: entry is referral\n" );
+		Debug( LDAP_DEBUG_TRACE,
+			   LDAP_XSTRING(tw_delete) ": entry is referral\n" );
 
 		rs->sr_err = LDAP_REFERRAL;
 		rs->sr_matched = ch_strdup( e->e_name.bv_val );
@@ -266,7 +257,8 @@ wt_delete( Operation *op, SlapReply *rs )
 								&slap_pre_read_bv, preread_ctrl ) )
 		{
 			Debug( LDAP_DEBUG_TRACE,
-				   "<== wt_delete: pre-read failed!\n" );
+				   "<== " LDAP_XSTRING(wt_delete) ": pre-read "
+				   "failed!\n" );
 			if ( op->o_preread & SLAP_CONTROL_CRITICAL ) {
 				/* FIXME: is it correct to abort
                  * operation if control fails? */
@@ -276,18 +268,21 @@ wt_delete( Operation *op, SlapReply *rs )
 	}
 
     /* Can't do it if we have kids */
-	rc = wt_dn2id_has_children( op, wc, e->e_id );
+	rc = wt_dn2id_has_children( op, wc->session, e->e_id );
 	if( rc != WT_NOTFOUND ) {
 		switch( rc ) {
 		case 0:
 			Debug(LDAP_DEBUG_ARGS,
-				  "<== wt_delete: non-leaf %s\n", op->o_req_dn.bv_val );
+				  "<== " LDAP_XSTRING(wt_delete)
+				  ": non-leaf %s\n",
+				  op->o_req_dn.bv_val );
 			rs->sr_err = LDAP_NOT_ALLOWED_ON_NONLEAF;
 			rs->sr_text = "subordinate objects must be deleted first";
 			break;
 		default:
 			Debug(LDAP_DEBUG_ARGS,
-				  "<== wt_delete: has_children failed: %s (%d)\n",
+				  "<== " LDAP_XSTRING(wt_delete)
+				  ": has_children failed: %s (%d)\n",
 				  wiredtiger_strerror(rc), rc );
 			rs->sr_err = LDAP_OTHER;
 			rs->sr_text = "internal error";
@@ -299,7 +294,7 @@ wt_delete( Operation *op, SlapReply *rs )
 	rc = wc->session->begin_transaction(wc->session, NULL);
 	if( rc ) {
 		Debug( LDAP_DEBUG_TRACE,
-			   "wt_delete: begin_transaction failed: %s (%d)\n",
+			   LDAP_XSTRING(wt_add) ": begin_transaction failed: %s (%d)\n",
 			   wiredtiger_strerror(rc), rc );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "begin_transaction failed";
@@ -307,10 +302,11 @@ wt_delete( Operation *op, SlapReply *rs )
 	}
 
 	/* delete from dn2id */
-	rc = wt_dn2id_delete( op, wc, &op->o_req_ndn);
+	rc = wt_dn2id_delete( op, wc->session, &e->e_nname);
 	if ( rc ) {
 		Debug(LDAP_DEBUG_TRACE,
-			  "<== wt_delete: dn2id failed: %s (%d)\n",
+			  "<== " LDAP_XSTRING(wt_delete)
+			  ": dn2id failed: %s (%d)\n",
 			  wiredtiger_strerror(rc), rc );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "dn2id delete failed";
@@ -322,7 +318,8 @@ wt_delete( Operation *op, SlapReply *rs )
 	rc = wt_index_entry_del( op, wc, e );
 	if ( rc ) {
 		Debug(LDAP_DEBUG_TRACE,
-			  "<== wt_delete: index delete failed: %s (%d)\n",
+			  "<== " LDAP_XSTRING(wt_delete)
+			  ": index delete failed: %s (%d)\n",
 			  wiredtiger_strerror(rc), rc );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "index delete failed";
@@ -337,7 +334,7 @@ wt_delete( Operation *op, SlapReply *rs )
 		assert( !BER_BVISNULL( &op->o_csn ) );
 		vals[0] = op->o_csn;
 		BER_BVZERO( &vals[1] );
-		rs->sr_err = wt_index_values( op, wc, slap_schema.si_ad_entryCSN,
+		rs->sr_err = wt_index_values( op, wc->session, slap_schema.si_ad_entryCSN,
 									  vals, 0, SLAP_INDEX_ADD_OP );
 		if ( rs->sr_err != LDAP_SUCCESS ) {
 			rs->sr_text = "entryCSN index update failed";
@@ -348,10 +345,11 @@ wt_delete( Operation *op, SlapReply *rs )
 	}
 
 	/* delete from id2entry */
-	rc = wt_id2entry_delete( op, wc, e );
+	rc = wt_id2entry_delete( op, wc->session, e );
 	if ( rc ) {
 		Debug( LDAP_DEBUG_TRACE,
-			   "<== wt_delete: id2entry failed: %s (%d)\n",
+			   "<== " LDAP_XSTRING(wt_delete)
+			   ": id2entry failed: %s (%d)\n",
 			   wiredtiger_strerror(rc), rc );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "entry delete failed";
@@ -366,7 +364,8 @@ wt_delete( Operation *op, SlapReply *rs )
 	rc = wc->session->commit_transaction(wc->session, NULL);
 	if( rc ) {
 		Debug( LDAP_DEBUG_TRACE,
-			   "<== wt_delete: commit_transaction failed: %s (%d)\n",
+			   "<== " LDAP_XSTRING(wt_delete)
+			   ": commit_transaction failed: %s (%d)\n",
 			   wiredtiger_strerror(rc), rc );
 		rs->sr_err = LDAP_OTHER;
 		rs->sr_text = "commit_transaction failed";
@@ -374,7 +373,8 @@ wt_delete( Operation *op, SlapReply *rs )
 	}
 
 	Debug( LDAP_DEBUG_TRACE,
-		   "wt_delete: deleted%s id=%08lx dn=\"%s\"\n",
+		   LDAP_XSTRING(wt_delete)
+		   ": deleted%s id=%08lx dn=\"%s\"\n",
 		   op->o_noop ? " (no-op)" : "", e->e_id, op->o_req_dn.bv_val );
 
 	rs->sr_err = LDAP_SUCCESS;

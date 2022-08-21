@@ -3,7 +3,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2016-2022 The OpenLDAP Foundation.
+ * Copyright 2016-2020 The OpenLDAP Foundation.
  * Portions Copyright 2016 Symas Corporation.
  * All rights reserved.
  *
@@ -1077,7 +1077,7 @@ asyncmeta_back_proxy_authz_ctrl(Operation *op,
 		 * option (2) will likely break the idassert
 		 * assumptions, so we cannot accept it;
 		 * option (1) means that we are contradicting
-		 * the client's request.
+		 * the client's reques.
 		 *
 		 * I think (4) is the only correct choice.
 		 */
@@ -1258,7 +1258,7 @@ asyncmeta_controls_add( Operation *op,
 	LDAPControl		**ctrls = NULL;
 	/* set to the maximum number of controls this backend can add */
 	LDAPControl		c[ 2 ] = {{ 0 }};
-	int			n = 0, i, j1 = 0, j2 = 0, skipped = 0;
+	int			n = 0, i, j1 = 0, j2 = 0;
 
 	*pctrls = NULL;
 
@@ -1344,22 +1344,12 @@ asyncmeta_controls_add( Operation *op,
 
 	i = 0;
 	if ( op->o_ctrls ) {
-		LDAPControl *proxyauthz = ldap_control_find(
-				LDAP_CONTROL_PROXY_AUTHZ, op->o_ctrls, NULL );
-
 		for ( i = 0; op->o_ctrls[ i ]; i++ ) {
-			/* Only replace it if we generated one */
-			if ( j1 && proxyauthz && proxyauthz == op->o_ctrls[ i ] ) {
-				/* Frontend has already checked only one is present */
-				assert( skipped == 0 );
-				skipped++;
-				continue;
-			}
-			ctrls[ i + j1 - skipped ] = op->o_ctrls[ i ];
+			ctrls[ i + j1 ] = op->o_ctrls[ i ];
 		}
 	}
 
-	n += j1 - skipped;
+	n += j1;
 	if ( j2 ) {
 		ctrls[ n ] = (LDAPControl *)&ctrls[ n + j2 + 1 ] + j1;
 		*ctrls[ n ] = c[ j1 ];
@@ -1403,8 +1393,8 @@ asyncmeta_dobind_init(Operation *op, SlapReply *rs, bm_context_t *bc, a_metaconn
 
 	meta_search_candidate_t	retcode;
 
-	Debug( LDAP_DEBUG_TRACE, "%s >>> asyncmeta_dobind_init[%d] msc %p\n",
-		op->o_log_prefix, candidate, msc );
+	Debug( LDAP_DEBUG_TRACE, "%s >>> asyncmeta_dobind_init[%d]\n",
+		op->o_log_prefix, candidate );
 
 	if ( mc->mc_authz_target == META_BOUND_ALL ) {
 		return META_SEARCH_CANDIDATE;
@@ -1573,19 +1563,6 @@ retry_bind:
 		Debug( asyncmeta_debug, "[%s] asyncmeta_dobind_init rc=%d msc: %p\n",
 		      time_buf, rc, msc );
 	}
-	if ( LogTest( LDAP_DEBUG_TRACE )) {
-		ber_socket_t s;
-		char sockname[LDAP_IPADDRLEN];
-		struct berval sockbv = BER_BVC( sockname );
-		Sockaddr addr;
-		socklen_t len = sizeof( addr );
-
-		ldap_get_option( msc->msc_ld, LDAP_OPT_DESC, &s );
-		getsockname( s, &addr.sa_addr, &len );
-		ldap_pvt_sockaddrstr( &addr, &sockbv );
-		Debug( LDAP_DEBUG_TRACE, "%s asyncmeta_dobind_init msc %p ld %p ldr %p fd %d addr %s\n",
-			op->o_log_prefix, msc, msc->msc_ld, msc->msc_ldr, s, sockname );
-	}
 
 	if (rc == LDAP_SERVER_DOWN ) {
 		goto down;
@@ -1683,9 +1660,6 @@ asyncmeta_dobind_init_with_retry(Operation *op, SlapReply *rs, bm_context_t *bc,
 	}
 
 	if ( LDAP_BACK_CONN_ISBOUND( msc ) || LDAP_BACK_CONN_ISANON( msc ) ) {
-		if ( mc->pending_ops > 1 ) {
-			asyncmeta_send_all_pending_ops( mc, candidate, op->o_threadctx, 1 );
-		}
 		return META_SEARCH_CANDIDATE;
 	}
 

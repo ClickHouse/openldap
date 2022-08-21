@@ -1,7 +1,7 @@
 # $OpenLDAP$
 # This work is part of OpenLDAP Software <http://www.openldap.org/>.
 #
-# Copyright 2003-2022 The OpenLDAP Foundation.
+# Copyright 2003-2020 The OpenLDAP Foundation.
 # Portions Copyright 2004 by IBM Corporation.
 # All rights reserved.
 
@@ -31,7 +31,7 @@ SSL_LIB = -lcrypto -L$(SSL_DIR)/lib
 
 LIBTOOL = $(LDAP_BUILD)/libtool
 CC = gcc
-OPT = -g -O2
+OPT = -g -O2 -Wall
 DEFS = -DLDAP_COMPONENT
 INCS = $(LDAP_INC) $(SNACC_INC) $(SSL_INC)
 LIBS = $(LDAP_LIB) $(SNACC_LIB) $(SSL_LIB)
@@ -50,12 +50,12 @@ moduledir = $(libexecdir)$(ldap_subdir)
 .SUFFIXES: .c .o .lo
 
 .c.lo:
-	$(LIBTOOL) --mode=compile $(CC) $(CFLAGS) $(OPT) $(CPPFLAGS) $(DEFS) $(INCS) -c $<
+	$(LIBTOOL) --mode=compile $(CC) $(OPT) $(DEFS) $(INCS) -c $<
 
 all: $(PROGRAMS)
 
 compmatch.la: componentlib.lo init.lo certificate.lo asn_to_syn_mr.lo authorityKeyIdentifier.lo crl.lo
-	$(LIBTOOL) --mode=link $(CC) $(LDFLAGS) -version-info $(LTVER) \
+	$(LIBTOOL) --mode=link $(CC) $(OPT) -version-info $(LTVER) \
 	-rpath $(moduledir) -module -o $@ $? $(LIBS)
 
 clean:

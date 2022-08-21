@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -19,6 +19,20 @@
 
 #define SLAPD_TOOLS 1
 #include "slap.h"
+
+enum slaptool {
+	SLAPADD=1,	/* LDIF -> database tool */
+	SLAPCAT,	/* database -> LDIF tool */
+	SLAPDN,		/* DN check w/ syntax tool */
+	SLAPINDEX,	/* database index tool */
+	SLAPMODIFY,	/* database modify tool */
+	SLAPPASSWD,	/* password generation tool */
+	SLAPSCHEMA,	/* schema checking tool */
+	SLAPTEST,	/* slapd.conf test tool */
+	SLAPAUTH,	/* test authz-regexp and authc/authz stuff */
+	SLAPACL,	/* test acl */
+	SLAPLAST
+};
 
 typedef struct tool_vars {
 	Backend *tv_be;

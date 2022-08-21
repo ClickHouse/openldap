@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -123,18 +123,18 @@ at_bvfind( struct berval *name )
 	struct aindexrec *air;
 
 	if ( attr_cache ) {
-		air = ldap_avl_find( attr_cache, name, attr_index_name_cmp );
+		air = avl_find( attr_cache, name, attr_index_name_cmp );
 		if ( air ) return air->air_at;
 	}
 
-	air = ldap_avl_find( attr_index, name, attr_index_name_cmp );
+	air = avl_find( attr_index, name, attr_index_name_cmp );
 
 	if ( air ) {
 		if ( air->air_at->sat_flags & SLAP_AT_DELETED ) {
 			air = NULL;
 		} else if (( slapMode & SLAP_TOOL_MODE ) && at_oc_cache ) {
-			ldap_avl_insert( &attr_cache, (caddr_t) air,
-				attr_index_cmp, ldap_avl_dup_error );
+			avl_insert( &attr_cache, (caddr_t) air,
+				attr_index_cmp, avl_dup_error );
 		}
 	}
 
@@ -200,7 +200,7 @@ at_delete_from_list(
 		list[i] = list[j];
 	}
 	list[i] = NULL;
-	/* Tell the runtime this can be shrunk */
+	/* Tell the runtime this can be shrinked */
 	list1 = ch_realloc(list, (i+1)*sizeof(AttributeType **));
 	if ( !list1 ) {
 		return -1;
@@ -239,7 +239,7 @@ at_delete_names( AttributeType *at )
 
 		ber_str2bv( *names, 0, 0, &tmpair.air_name );
 		tmpair.air_at = at;
-		air = (struct aindexrec *)ldap_avl_delete( &attr_index,
+		air = (struct aindexrec *)avl_delete( &attr_index,
 			(caddr_t)&tmpair, attr_index_cmp );
 		assert( air != NULL );
 		ldap_memfree( air );
@@ -325,7 +325,7 @@ at_destroy( void )
 		at_delete_names( a );
 	}
 
-	ldap_avl_free(attr_index, at_destroy_one);
+	avl_free(attr_index, at_destroy_one);
 
 	if ( slap_schema.si_at_undefined ) {
 		ad_destroy(slap_schema.si_at_undefined->sat_ad);
@@ -451,7 +451,7 @@ at_insert(
 		air->air_at = sat;
 		air_old = NULL;
 
-		if ( ldap_avl_insert( &attr_index, (caddr_t) air,
+		if ( avl_insert( &attr_index, (caddr_t) air,
 		                 attr_index_cmp, at_dup_error ) )
 		{
 			AttributeType	*old_sat;
@@ -515,8 +515,8 @@ at_insert(
 				ch_calloc( 1, sizeof(struct aindexrec) );
 			ber_str2bv( *names, 0, 0, &air->air_name );
 			air->air_at = sat;
-			if ( ldap_avl_insert( &attr_index, (caddr_t) air,
-			                 attr_index_cmp, ldap_avl_dup_error ) )
+			if ( avl_insert( &attr_index, (caddr_t) air,
+			                 attr_index_cmp, avl_dup_error ) )
 			{
 				AttributeType	*old_sat;
 				int		rc;
@@ -535,7 +535,7 @@ at_insert(
 					names--;
 					ber_str2bv( *names, 0, 0, &tmpair.air_name );
 					tmpair.air_at = sat;
-					air = (struct aindexrec *)ldap_avl_delete( &attr_index,
+					air = (struct aindexrec *)avl_delete( &attr_index,
 						(caddr_t)&tmpair, attr_index_cmp );
 					assert( air != NULL );
 					ldap_memfree( air );
@@ -546,7 +546,7 @@ at_insert(
 
 					ber_str2bv( sat->sat_oid, 0, 0, &tmpair.air_name );
 					tmpair.air_at = sat;
-					air = (struct aindexrec *)ldap_avl_delete( &attr_index,
+					air = (struct aindexrec *)avl_delete( &attr_index,
 						(caddr_t)&tmpair, attr_index_cmp );
 					assert( air != NULL );
 					ldap_memfree( air );
@@ -973,7 +973,7 @@ static void
 at_index_print( void )
 {
 	printf("Printing attribute type index:\n");
-	(void) ldap_avl_apply( attr_index, at_index_printnode, 0, -1, AVL_INORDER );
+	(void) avl_apply( attr_index, at_index_printnode, 0, -1, AVL_INORDER );
 }
 #endif
 #endif

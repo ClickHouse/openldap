@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2022 The OpenLDAP Foundation.
+ * Copyright 2005-2020 The OpenLDAP Foundation.
  * Portions copyright 2004-2005 Symas Corporation.
  * All rights reserved.
  *
@@ -29,7 +29,7 @@
 #include <ac/ctype.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "lutil.h"
 #include "ldap_rq.h"
 
@@ -66,8 +66,6 @@ typedef struct log_base {
 typedef struct log_info {
 	BackendDB *li_db;
 	struct berval li_db_suffix;
-	int li_open;
-
 	slap_mask_t li_ops;
 	int li_age;
 	int li_cycle;
@@ -97,7 +95,7 @@ enum {
 };
 
 static ConfigTable log_cfats[] = {
-	{ "logdb", "suffix", 2, 2, 0, ARG_DN|ARG_QUOTE|ARG_MAGIC|LOG_DB,
+	{ "logdb", "suffix", 2, 2, 0, ARG_DN|ARG_MAGIC|LOG_DB,
 		log_cf_gen, "( OLcfgOvAt:4.1 NAME 'olcAccessLogDB' "
 			"DESC 'Suffix of database for log content' "
 			"EQUALITY distinguishedNameMatch "
@@ -203,7 +201,7 @@ static AttributeDescription *ad_reqDN, *ad_reqStart, *ad_reqEnd, *ad_reqType,
 	*ad_reqSizeLimit, *ad_reqTimeLimit, *ad_reqAttrsOnly, *ad_reqData,
 	*ad_reqId, *ad_reqMessage, *ad_reqVersion, *ad_reqDerefAliases,
 	*ad_reqReferral, *ad_reqOld, *ad_auditContext, *ad_reqEntryUUID,
-	*ad_minCSN, *ad_reqNewDN;
+	*ad_minCSN;
 
 static int
 logSchemaControlValidate(
@@ -427,15 +425,6 @@ static struct {
 		"SYNTAX 1.3.6.1.4.1.4203.666.11.2.1{64} "
 		"NO-USER-MODIFICATION "
 		"USAGE dSAOperation )", &ad_minCSN },
-
-	/*
-	 * ITS#9552
-	 */
-	{ "( " LOG_SCHEMA_AT ".33 NAME 'reqNewDN' "
-		"DESC 'New DN after rename' "
-		"EQUALITY distinguishedNameMatch "
-		"SYNTAX OMsDN "
-		"SINGLE-VALUE )", &ad_reqNewDN },
 	{ NULL, NULL }
 };
 
@@ -483,13 +472,12 @@ static struct {
 	{ "( " LOG_SCHEMA_OC ".9 NAME 'auditModify' "
 		"DESC 'Modify operation' "
 		"SUP auditWriteObject STRUCTURAL "
-		"MAY ( reqOld $ reqMod ) )", &log_ocs[LOG_EN_MODIFY] },
+		"MAY reqOld MUST reqMod )", &log_ocs[LOG_EN_MODIFY] },
 	{ "( " LOG_SCHEMA_OC ".10 NAME 'auditModRDN' "
 		"DESC 'ModRDN operation' "
 		"SUP auditWriteObject STRUCTURAL "
 		"MUST ( reqNewRDN $ reqDeleteOldRDN ) "
-		"MAY ( reqNewSuperior $ reqMod $ reqOld $ reqNewDN ) )",
-		&log_ocs[LOG_EN_MODRDN] },
+		"MAY ( reqNewSuperior $ reqMod $ reqOld ) )", &log_ocs[LOG_EN_MODRDN] },
 	{ "( " LOG_SCHEMA_OC ".11 NAME 'auditSearch' "
 		"DESC 'Search operation' "
 		"SUP auditReadObject STRUCTURAL "
@@ -641,7 +629,6 @@ log_old_lookup( Operation *op, SlapReply *rs )
 
 		/* Find the correct sid */
 		sid = slap_parse_csn_sid( &a->a_nvals[0] );
-		ldap_pvt_thread_mutex_lock( &li->li_log_mutex );
 		for ( i=0; i < li->li_numcsns; i++ ) {
 			if ( sid <= li->li_sids[i] ) break;
 		}
@@ -649,18 +636,15 @@ log_old_lookup( Operation *op, SlapReply *rs )
 			Debug( LDAP_DEBUG_ANY, "log_old_lookup: "
 					"csn=%s with sid not in minCSN set!\n",
 					a->a_nvals[0].bv_val );
-			slap_insert_csn_sids( (struct sync_cookie *)&li->li_mincsn, i,
-					sid, &a->a_nvals[0] );
-		} else {
-			/* Paranoid len check, normalized CSNs are always the same length */
-			if ( len > li->li_mincsn[i].bv_len )
-				len = li->li_mincsn[i].bv_len;
-			if ( ber_bvcmp( &li->li_mincsn[i], &a->a_nvals[0] ) < 0 ) {
-				pd->mincsn_updated = 1;
-				AC_MEMCPY( li->li_mincsn[i].bv_val, a->a_nvals[0].bv_val, len );
-			}
 		}
-		ldap_pvt_thread_mutex_unlock( &li->li_log_mutex );
+
+		/* Paranoid len check, normalized CSNs are always the same length */
+		if ( len > li->li_mincsn[i].bv_len )
+			len = li->li_mincsn[i].bv_len;
+		if ( ber_bvcmp( &li->li_mincsn[i], &a->a_nvals[0] ) < 0 ) {
+			pd->mincsn_updated = 1;
+			AC_MEMCPY( li->li_mincsn[i].bv_val, a->a_nvals[0].bv_val, len );
+		}
 	}
 	if ( pd->used >= pd->slots ) {
 		pd->slots += PURGE_INCREMENT;
@@ -737,10 +721,9 @@ accesslog_purge( void *ctx, void *arg )
 		if ( pd.mincsn_updated ) {
 			Modifications mod;
 			/* update context's minCSN to reflect oldest CSN */
-			ldap_pvt_thread_mutex_lock( &li->li_log_mutex );
 			mod.sml_numvals = li->li_numcsns;
 			mod.sml_values = li->li_mincsn;
-			mod.sml_nvalues = li->li_mincsn;
+			mod.sml_nvalues = NULL;
 			mod.sml_desc = ad_minCSN;
 			mod.sml_op = LDAP_MOD_REPLACE;
 			mod.sml_flags = SLAP_MOD_INTERNAL;
@@ -759,7 +742,6 @@ accesslog_purge( void *ctx, void *arg )
 						li->li_numcsns );
 				op->o_bd->be_modify( op, &rs );
 			}
-			ldap_pvt_thread_mutex_unlock( &li->li_log_mutex );
 		}
 
 		/* delete the expired entries */
@@ -959,14 +941,6 @@ log_cf_gen(ConfigArgs *c)
 						c->log, c->cr_msg, c->value_dn.bv_val );
 					rc = 1;
 				}
-				if ( !rc && ( li->li_db->bd_self == c->be->bd_self )) {
-					snprintf( c->cr_msg, sizeof( c->cr_msg ),
-						"<%s> invalid suffix, points to itself",
-						c->argv[0] );
-					Debug( LDAP_DEBUG_ANY, "%s: %s \"%s\"\n",
-						c->log, c->cr_msg, c->value_dn.bv_val );
-					rc = 1;
-				}
 				ch_free( c->value_ndn.bv_val );
 			} else {
 				li->li_db_suffix = c->value_ndn;
@@ -990,7 +964,7 @@ log_cf_gen(ConfigArgs *c)
 					struct re_s *re = li->li_task;
 					if ( re )
 						re->interval.tv_sec = li->li_cycle;
-					else if ( li->li_open ) {
+					else {
 						ldap_pvt_thread_mutex_lock( &slapd_rq.rq_mutex );
 						li->li_task = ldap_pvt_runqueue_insert( &slapd_rq,
 							li->li_cycle, accesslog_purge, li,
@@ -1512,25 +1486,19 @@ static int accesslog_response(Operation *op, SlapReply *rs) {
 	slap_verbmasks *lo;
 	Entry *e = NULL, *old = NULL, *e_uuid = NULL;
 	char timebuf[LDAP_LUTIL_GENTIME_BUFSIZE+8];
-	struct berval bv, bv2 = BER_BVNULL;
+	struct berval bv;
 	char *ptr;
 	BerVarray vals;
 	Operation op2 = {0};
 	SlapReply rs2 = {REP_RESULT};
 
-	/* ITS#9051 Make sure we only remove the callback on a final response */
-	if ( rs->sr_type == REP_RESULT || rs->sr_type == REP_EXTENDED ||
-			rs->sr_type == REP_SASL ) {
+	{
 		slap_callback *sc = op->o_callback;
 		op->o_callback = sc->sc_next;
 		op->o_tmpfree(sc, op->o_tmpmemctx );
 	}
 
 	if ( rs->sr_type != REP_RESULT && rs->sr_type != REP_EXTENDED )
-		return SLAP_CB_CONTINUE;
-
-	/* can't do anything if logDB isn't open */
-	if ( !SLAP_DBOPEN( li->li_db ))
 		return SLAP_CB_CONTINUE;
 
 	logop = accesslog_op2logop( op );
@@ -1575,13 +1543,7 @@ static int accesslog_response(Operation *op, SlapReply *rs) {
 		return SLAP_CB_CONTINUE;
 	}
 
-	/*
-	 * ITS#9051 Technically LDAP_REFERRAL and LDAP_SASL_BIND_IN_PROGRESS
-	 * are not errors, but they aren't really success either
-	 */
-	if ( li->li_success && rs->sr_err != LDAP_SUCCESS &&
-			rs->sr_err != LDAP_COMPARE_TRUE &&
-			rs->sr_err != LDAP_COMPARE_FALSE )
+	if ( li->li_success && rs->sr_err != LDAP_SUCCESS )
 		goto done;
 
 	e = accesslog_entry( op, rs, li, logop, &op2 );
@@ -1792,13 +1754,7 @@ static int accesslog_response(Operation *op, SlapReply *rs) {
 			NULL );
 		if ( op->orr_newSup ) {
 			attr_merge_one( e, ad_reqNewSuperior, op->orr_newSup, op->orr_nnewSup );
-			bv2 = *op->orr_nnewSup;
-		} else {
-			dnParent( &op->o_req_ndn, &bv2 );
 		}
-		build_new_dn( &bv, &bv2, &op->orr_nnewrdn, op->o_tmpmemctx );
-		attr_merge_one( e, ad_reqNewDN, &bv, NULL );
-		op->o_tmpfree( bv.bv_val, op->o_tmpmemctx );
 		break;
 
 	case LOG_EN_COMPARE:
@@ -1945,9 +1901,9 @@ static int accesslog_response(Operation *op, SlapReply *rs) {
 
 	op2.o_bd->be_add( &op2, &rs2 );
 	if ( rs2.sr_err != LDAP_SUCCESS ) {
-		Debug( LDAP_DEBUG_SYNC, "%s accesslog_response: "
-			"got result 0x%x adding log entry %s\n",
-			op->o_log_prefix, rs2.sr_err, op2.o_req_dn.bv_val );
+		Debug( LDAP_DEBUG_SYNC,
+			"accesslog_response: got result 0x%x adding log entry %s\n",
+			rs2.sr_err, op2.o_req_dn.bv_val );
 	}
 	if ( e == op2.ora_e ) entry_free( e );
 	e = NULL;
@@ -2043,10 +1999,6 @@ accesslog_op_mod( Operation *op, SlapReply *rs )
 	if ( op->o_dont_replicate )
 		return SLAP_CB_CONTINUE;
 
-	/* can't do anything if logDB isn't open */
-	if ( !SLAP_DBOPEN( li->li_db ))
-		return SLAP_CB_CONTINUE;
-	
 	logop = accesslog_op2logop( op );
 	lo = logops+logop+EN_OFFSET;
 
@@ -2279,10 +2231,6 @@ accesslog_db_destroy(
 		li->li_oldattrs = la->next;
 		ch_free( la );
 	}
-	if ( li->li_sids )
-		ch_free( li->li_sids );
-	if ( li->li_mincsn )
-		ber_bvarray_free( li->li_mincsn );
 	ldap_pvt_thread_mutex_destroy( &li->li_log_mutex );
 	ldap_pvt_thread_mutex_destroy( &li->li_op_rmutex );
 	free( li );
@@ -2306,7 +2254,6 @@ accesslog_db_root(
 	Entry *e;
 	int rc;
 
-	ldap_pvt_thread_mutex_lock( &li->li_log_mutex );
 	connection_fake_init( &conn, &opbuf, ctx );
 	op = &opbuf.ob_op;
 	op->o_bd = li->li_db;
@@ -2422,19 +2369,9 @@ accesslog_db_root(
 		if ( e == op->ora_e )
 			entry_free( e );
 	}
-	li->li_open = 1;
-	ldap_pvt_thread_mutex_unlock( &li->li_log_mutex );
-
 	ldap_pvt_thread_mutex_lock( &slapd_rq.rq_mutex );
 	ldap_pvt_runqueue_stoptask( &slapd_rq, rtask );
 	ldap_pvt_runqueue_remove( &slapd_rq, rtask );
-
-	if ( li->li_age && li->li_cycle ) {
-		assert( li->li_task == NULL );
-		li->li_task = ldap_pvt_runqueue_insert( &slapd_rq,
-				li->li_cycle, accesslog_purge, li,
-				"accesslog_purge", li->li_db->be_suffix[0].bv_val );
-	}
 	ldap_pvt_thread_mutex_unlock( &slapd_rq.rq_mutex );
 
 	return NULL;
@@ -2460,11 +2397,6 @@ accesslog_db_open(
 			"accesslog: \"logdb <suffix>\" missing or invalid.\n" );
 		return 1;
 	}
-	if ( li->li_db->bd_self == be->bd_self ) {
-		Debug( LDAP_DEBUG_ANY,
-			"accesslog: \"logdb <suffix>\" is this database, cannot log to itself.\n" );
-		return 1;
-	}
 
 	if ( slapMode & SLAP_TOOL_MODE )
 		return 0;
@@ -2478,30 +2410,6 @@ accesslog_db_open(
 	ldap_pvt_runqueue_insert( &slapd_rq, 3600, accesslog_db_root, on,
 		"accesslog_db_root", li->li_db->be_suffix[0].bv_val );
 	ldap_pvt_thread_mutex_unlock( &slapd_rq.rq_mutex );
-
-	return 0;
-}
-
-static int
-accesslog_db_close(
-	BackendDB *be,
-	ConfigReply *cr
-)
-{
-	slap_overinst *on = (slap_overinst *)be->bd_info;
-	log_info *li = on->on_bi.bi_private;
-	struct re_s *re = li->li_task;
-
-	li->li_open = 0;
-
-	if ( re ) {
-		li->li_task = NULL;
-		ldap_pvt_thread_mutex_lock( &slapd_rq.rq_mutex );
-		if ( ldap_pvt_runqueue_isrunning( &slapd_rq, re ) )
-			ldap_pvt_runqueue_stoptask( &slapd_rq, re );
-		ldap_pvt_runqueue_remove( &slapd_rq, re );
-		ldap_pvt_thread_mutex_unlock( &slapd_rq.rq_mutex );
-	}
 
 	return 0;
 }
@@ -2672,7 +2580,6 @@ int accesslog_initialize()
 	accesslog.on_bi.bi_db_init = accesslog_db_init;
 	accesslog.on_bi.bi_db_destroy = accesslog_db_destroy;
 	accesslog.on_bi.bi_db_open = accesslog_db_open;
-	accesslog.on_bi.bi_db_close = accesslog_db_close;
 
 	accesslog.on_bi.bi_op_add = accesslog_op_mod;
 	accesslog.on_bi.bi_op_bind = accesslog_op_misc;

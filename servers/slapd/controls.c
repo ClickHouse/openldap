@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1628,10 +1628,7 @@ static int parseValuesReturnFilter (
 		} else {
 			send_ldap_result( op, rs );
 		}
-		if( op->o_vrFilter != NULL) {
-			vrFilter_free( op, op->o_vrFilter );
-			op->o_vrFilter = NULL;
-		}
+		if( op->o_vrFilter != NULL) vrFilter_free( op, op->o_vrFilter ); 
 	}
 #ifdef LDAP_DEBUG
 	else {

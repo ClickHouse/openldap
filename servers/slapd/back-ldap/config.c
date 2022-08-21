@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2003-2022 The OpenLDAP Foundation.
+ * Copyright 2003-2020 The OpenLDAP Foundation.
  * Portions Copyright 1999-2003 Howard Chu.
  * Portions Copyright 2000-2003 Pierangelo Masarati.
  * All rights reserved.
@@ -30,7 +30,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "back-ldap.h"
 #include "lutil.h"
 #include "ldif.h"
@@ -67,7 +67,6 @@ enum {
 	LDAP_BACK_CFG_ONERR,
 
 	LDAP_BACK_CFG_KEEPALIVE,
-	LDAP_BACK_CFG_TCP_USER_TIMEOUT,
 
 	LDAP_BACK_CFG_OMIT_UNKNOWN_SCHEMA,
 
@@ -309,14 +308,6 @@ static ConfigTable ldapcfg[] = {
 			"DESC 'TCP keepalive' "
 			"EQUALITY caseIgnoreMatch "
 			"SYNTAX OMsDirectoryString "
-			"SINGLE-VALUE )",
-		NULL, NULL },
-	{ "tcp-user-timeout", "milliseconds", 2, 2, 0,
-		ARG_MAGIC|ARG_UINT|LDAP_BACK_CFG_TCP_USER_TIMEOUT,
-		ldap_back_cf_gen, "( OLcfgDbAt:3.30 "
-			"NAME 'olcDbTcpUserTimeout' "
-			"DESC 'TCP User Timeout' "
-			"SYNTAX OMsInteger "
 			"SINGLE-VALUE )",
 		NULL, NULL },
 	{ NULL, NULL, 0, 0, 0, ARG_IGNORED,
@@ -742,9 +733,6 @@ int
 slap_idassert_parse( ConfigArgs *c, slap_idassert_t *si )
 {
 	int		i;
-
-	/* set default */
-	si->si_mode = LDAP_BACK_IDASSERT_LEGACY;
 
 	for ( i = 1; i < c->argc; i++ ) {
 		if ( strncasecmp( c->argv[ i ], "mode=", STRLENOF( "mode=" ) ) == 0 ) {
@@ -1373,10 +1361,6 @@ ldap_back_cf_gen( ConfigArgs *c )
 			break;
 			}
 
-		case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
-			c->value_uint = li->li_tls.sb_tcp_user_timeout;
-			break;
-
 		default:
 			/* FIXME: we need to handle all... */
 			assert( 0 );
@@ -1400,7 +1384,7 @@ ldap_back_cf_gen( ConfigArgs *c )
 			/* NOTE: don't worry about locking: if we got here,
 			 * other threads are suspended. */
 			if ( li->li_conninfo.lai_tree != NULL ) {
-				ldap_tavl_free( li->li_conninfo.lai_tree, ldap_back_conn_free );
+				avl_free( li->li_conninfo.lai_tree, ldap_back_conn_free );
 				li->li_conninfo.lai_tree = NULL;
 			}
 			
@@ -1537,10 +1521,6 @@ ldap_back_cf_gen( ConfigArgs *c )
 			li->li_tls.sb_keepalive.sk_idle = 0;
 			li->li_tls.sb_keepalive.sk_probes = 0;
 			li->li_tls.sb_keepalive.sk_interval = 0;
-			break;
-
-		case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
-			li->li_tls.sb_tcp_user_timeout = 0;
 			break;
 
 		default:
@@ -2051,17 +2031,11 @@ done_url:;
 		}
 		break;
 
-	case LDAP_BACK_CFG_KEEPALIVE: {
-		struct berval bv;
-		ber_str2bv( c->argv[1], 0, 1, &bv );
-		slap_keepalive_parse( &bv, &li->li_tls.sb_keepalive, 0, 0, 0 );
-		}
+	case LDAP_BACK_CFG_KEEPALIVE:
+		slap_keepalive_parse( ber_bvstrdup(c->argv[1]),
+				 &li->li_tls.sb_keepalive, 0, 0, 0);
 		break;
-
-	case LDAP_BACK_CFG_TCP_USER_TIMEOUT:
-		li->li_tls.sb_tcp_user_timeout = c->value_uint;
-		break;
-
+		
 	default:
 		/* FIXME: try to catch inconsistencies */
 		assert( 0 );
