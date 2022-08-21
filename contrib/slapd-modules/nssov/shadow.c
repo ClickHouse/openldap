@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>. 
  *
- * Copyright 2008-2022 The OpenLDAP Foundation.
+ * Copyright 2008-2020 The OpenLDAP Foundation.
  * Portions Copyright 2008 by Howard Chu, Symas Corp.
  * All rights reserved.
  *
@@ -83,7 +83,7 @@ static long to_date(struct berval *date,AttributeDescription *attr)
 		/* we expect an AD 64-bit datetime value;
 			 we should do date=date/864000000000-134774
 			 but that causes problems on 32-bit platforms,
-			 first we divide by 1000000000 by stripping the
+			 first we devide by 1000000000 by stripping the
 			 last 9 digits from the string and going from there */
 		l=date->bv_len-9;
 		if (l<1 || l>(sizeof(buffer)-1))

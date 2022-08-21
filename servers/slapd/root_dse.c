@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2022 The OpenLDAP Foundation.
+ * Copyright 1999-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -278,9 +278,12 @@ fail:
 		if ( SLAP_GLUE_SUBORDINATE( be ) && !SLAP_GLUE_ADVERTISE( be ) ) {
 			continue;
 		}
-		if ( attr_merge( e, ad_namingContexts,
-				be->be_suffix, be->be_nsuffix ) ) {
-			goto fail;
+		for ( j = 0; be->be_suffix[j].bv_val != NULL; j++ ) {
+			if( attr_merge_one( e, ad_namingContexts,
+					&be->be_suffix[j], NULL ) )
+			{
+				goto fail;
+			}
 		}
 	}
 

@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -977,7 +977,7 @@ ldap_attributetype2bv(  LDAPAttributeType * at, struct berval *bv )
  *
  * Each of them is written as a recursive-descent parser, except that
  * none of them is really recursive.  But the idea is kept: there
- * is one routine per non-terminal that either gobbles lexical tokens
+ * is one routine per non-terminal that eithers gobbles lexical tokens
  * or calls lower-level routines, etc.
  *
  * The scanner is implemented in the routine get_token.  Actually,

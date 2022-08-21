@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2022 The OpenLDAP Foundation.
+ * Copyright 2001-2020 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -24,7 +24,7 @@
 
 #include <ldap_pvt.h>
 #include <ldap_pvt_thread.h>
-#include <ldap_avl.h>
+#include <avl.h>
 #include <slap.h>
 
 LDAP_BEGIN_DECL
@@ -132,7 +132,6 @@ typedef struct monitor_info_t {
 	AttributeDescription	*mi_ad_monitorUpdateRef;
 	AttributeDescription	*mi_ad_monitorRuntimeConfig;
 	AttributeDescription	*mi_ad_monitorSuperiorDN;
-	AttributeDescription	*mi_ad_monitorConnectionOpsAsync;
 
 	/*
 	 * Generic description attribute

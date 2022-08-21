@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2001-2022 The OpenLDAP Foundation.
+ * Copyright 2001-2020 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * All rights reserved.
  *
@@ -26,11 +26,11 @@
 
 #include <lutil.h>
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "lber_pvt.h"
 #include "back-monitor.h"
 
-#include "slap-config.h"
+#include "config.h"
 
 #undef INTEGRATE_CORE_SCHEMA
 
@@ -462,7 +462,6 @@ monitor_back_register_entry(
 	unsigned long		flags )
 {
 	monitor_info_t 	*mi;
-	int rc = 0;
 
 	if ( be_monitor == NULL ) {
 		Debug( LDAP_DEBUG_ANY,
@@ -485,6 +484,7 @@ monitor_back_register_entry(
 		struct berval	pdn = BER_BVNULL;
 		monitor_entry_t *mp = NULL,
 				*mp_parent = NULL;
+		int		rc = 0;
 
 		if ( monitor_cache_get( mi, &e->e_nname, &e_parent ) == 0 ) {
 			/* entry exists */
@@ -615,7 +615,7 @@ done:;
 		**elpp = el;
 	}
 
-	return rc;
+	return 0;
 }
 
 int
@@ -1951,13 +1951,6 @@ monitor_back_initialize(
 			"NO-USER-MODIFICATION "
 			"USAGE dSAOperation )", SLAP_AT_FINAL|SLAP_AT_HIDE,
 			offsetof(monitor_info_t, mi_ad_monitorSuperiorDN) },
-		{ "( 1.3.6.1.4.1.4203.666.1.55.31 "
-			"NAME 'monitorConnectionOpsAsync' "
-			"DESC 'monitor number of asynchronous operations in execution within the connection' "
-			"SUP monitorCounter "
-			"NO-USER-MODIFICATION "
-			"USAGE dSAOperation )", SLAP_AT_FINAL|SLAP_AT_HIDE,
-			offsetof(monitor_info_t, mi_ad_monitorConnectionOpsAsync) },
 		{ NULL, 0, -1 }
 	};
 
@@ -1970,7 +1963,6 @@ monitor_back_initialize(
 		{ "olmGenericAttributes",		"olmSubSystemAttributes:0" },
 		{ "olmDatabaseAttributes",		"olmSubSystemAttributes:1" },
 		{ "olmOverlayAttributes",		"olmSubSystemAttributes:2" },
-		{ "olmModuleAttributes",		"olmSubSystemAttributes:3" },
 
 		/* for example, back-mdb specific attrs
 		 * are in "olmDatabaseAttributes:12"
@@ -1983,7 +1975,6 @@ monitor_back_initialize(
 		{ "olmGenericObjectClasses",		"olmSubSystemObjectClasses:0" },
 		{ "olmDatabaseObjectClasses",		"olmSubSystemObjectClasses:1" },
 		{ "olmOverlayObjectClasses",		"olmSubSystemObjectClasses:2" },
-		{ "olmModuleObjectClasses",			"olmSubSystemObjectClasses:3" },
 
 		/* for example, back-mdb specific objectClasses
 		 * are in "olmDatabaseObjectClasses:12"

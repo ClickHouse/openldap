@@ -944,6 +944,7 @@ RetCodes
 userApplications
 NDBM
 newSuperiorDN
+browseable
 auditBind
 setstyle
 newSuperior
@@ -1672,4 +1673,3 @@ lmdb
 LMDB
 LMDB's
 MDB
-slapmodify

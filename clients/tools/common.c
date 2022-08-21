@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * Portions Copyright 2003 Kurt D. Zeilenga.
  * Portions Copyright 2003 IBM Corporation.
  * All rights reserved.
@@ -730,6 +730,8 @@ tool_args( int argc, char **argv )
 				}
 				unknown_ctrls = tmpctrls;
 				ctrl.ldctl_oid = control;
+				/* don't free it */
+				control = NULL;
 				ctrl.ldctl_value.bv_val = NULL;
 				ctrl.ldctl_value.bv_len = 0;
 				ctrl.ldctl_iscritical = crit;
@@ -756,8 +758,6 @@ tool_args( int argc, char **argv )
 					ctrl.ldctl_value = bv;
 				}
 
-				/* don't free it */
-				control = NULL;
 				unknown_ctrls[ unknown_ctrls_num ] = ctrl;
 				unknown_ctrls_num++;
 
@@ -2285,6 +2285,7 @@ print_deref( LDAP *ld, LDAPControl *ctrl )
 			}
 		}
 		ptr = lutil_strncopy( ptr, dr->derefVal.bv_val, dr->derefVal.bv_len );
+		*ptr++ = '\n';
 		*ptr = '\0';
 		assert( ptr <= buf + len );
 
@@ -2346,6 +2347,7 @@ print_syncstate( LDAP *ld, LDAPControl *ctrl )
 	char buf[LDAP_LUTIL_UUIDSTR_BUFSIZE], *uuidstr = "(UUID malformed)";
 	BerElement *ber;
 	ber_tag_t tag;
+	ber_len_t len;
 	ber_int_t state;
 	int rc;
 
@@ -2420,6 +2422,7 @@ print_syncdone( LDAP *ld, LDAPControl *ctrl )
 {
 	BerElement *ber;
 	struct berval cookie = BER_BVNULL;
+	ber_tag_t tag;
 	ber_len_t len;
 	ber_int_t refreshDeletes = 0;
 

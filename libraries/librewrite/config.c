@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2022 The OpenLDAP Foundation.
+ * Copyright 2000-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -351,7 +351,7 @@ rewrite_builtin_map_insert(
 	/*
 	 * May need a mutex?
 	 */
-	return ldap_avl_insert( &info->li_maps, ( caddr_t )map,
+	return avl_insert( &info->li_maps, ( caddr_t )map,
 			rewrite_builtin_map_cmp,
 		       	rewrite_builtin_map_dup );
 }
@@ -372,7 +372,7 @@ rewrite_builtin_map_find(
 
 	tmp.lb_name = ( char * )name;
 
-	return ( struct rewrite_builtin_map * )ldap_avl_find( info->li_maps,
+	return ( struct rewrite_builtin_map * )avl_find( info->li_maps,
 			( caddr_t )&tmp, rewrite_builtin_map_cmp );
 }
 

@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * Portions Copyright 1998-2003 Kurt D. Zeilenga.
  * All rights reserved.
  *
@@ -37,15 +37,11 @@
 #include <lutil_sha1.h>
 
 #include "ldap_defaults.h"
-
 #include "slap.h"
-#include "slap-config.h"
-#include "slapcommon.h"
 
+static int	verbose = 0;
 static char	*modulepath = NULL;
 static char	*moduleload = NULL;
-static int	moduleargc = 0;
-static char	**moduleargv = NULL;
 
 static void
 usage(const char *s)
@@ -84,17 +80,7 @@ parse_slappasswdopt( void )
 		modulepath = p;
 
 	} else if ( strncasecmp( optarg, "module-load", len ) == 0 ) {
-		ConfigArgs c = { .line = p };
-
-		if ( config_fp_parse_line( &c ) ) {
-			return -1;
-		}
-		moduleload = c.argv[0];
-
-		moduleargc = c.argc - 1;
-		if ( moduleargc ) {
-			moduleargv = c.argv+1;
-		}
+		moduleload = p;
 
 	} else {
 		return -1;
@@ -218,7 +204,6 @@ slappasswd( int argc, char *argv[] )
 			usage ( progname );
 		}
 	}
-	slapTool = SLAPPASSWD;
 
 	if( argc - optind != 0 ) {
 		usage( progname );
@@ -235,7 +220,7 @@ slappasswd( int argc, char *argv[] )
 		goto destroy;
 	}
 
-	if ( moduleload && module_load(moduleload, moduleargc, moduleargv) ) {
+	if ( moduleload && module_load(moduleload, 0, NULL) ) {
 		rc = EXIT_FAILURE;
 		goto destroy;
 	}

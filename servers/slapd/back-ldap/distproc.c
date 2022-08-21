@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2005-2022 The OpenLDAP Foundation.
+ * Copyright 2005-2020 The OpenLDAP Foundation.
  * Portions Copyright 2003 Howard Chu.
  * All rights reserved.
  *
@@ -33,7 +33,7 @@
 
 #include "back-ldap.h"
 
-#include "slap-config.h"
+#include "config.h"
 
 /*
  * From <draft-sermersheim-ldap-distproc>
@@ -432,7 +432,7 @@ distproc_ldadd( CfEntryInfo *p, Entry *e, ConfigArgs *ca )
 	if ( lc->lc_common_li == NULL ) {
 		lc->lc_common_li = li;
 
-	} else if ( ldap_tavl_insert( &lc->lc_lai.lai_tree, (caddr_t)li,
+	} else if ( avl_insert( &lc->lc_lai.lai_tree, (caddr_t)li,
 		ldap_distproc_uri_cmp, ldap_distproc_uri_dup ) )
 	{
 		Debug( LDAP_DEBUG_ANY, "slapd-distproc: "
@@ -460,27 +460,26 @@ typedef struct ldap_distproc_cfadd_apply_t {
 	int		count;
 } ldap_distproc_cfadd_apply_t;
 
-static void
-ldap_distproc_cfadd_apply(
-	ldapinfo_t *li,
-	Operation *op,
-	SlapReply *rs,
-	Entry *p,
-	ConfigArgs *ca,
-	int count )
+static int
+ldap_distproc_cfadd_apply( void *datum, void *arg )
 {
+	ldapinfo_t			*li = (ldapinfo_t *)datum;
+	ldap_distproc_cfadd_apply_t	*lca = (ldap_distproc_cfadd_apply_t *)arg;
+
 	struct berval			bv;
 
 	/* FIXME: should not hardcode "olcDatabase" here */
-	bv.bv_len = snprintf( ca->cr_msg, sizeof( ca->cr_msg ),
-		"olcDatabase={%d}%s", count, lback->bi_type );
-	bv.bv_val = ca->cr_msg;
+	bv.bv_len = snprintf( lca->ca->cr_msg, sizeof( lca->ca->cr_msg ),
+		"olcDatabase={%d}%s", lca->count, lback->bi_type );
+	bv.bv_val = lca->ca->cr_msg;
 
-	ca->be->be_private = (void *)li;
-	config_build_entry( op, rs, p->e_private, ca,
+	lca->ca->be->be_private = (void *)li;
+	config_build_entry( lca->op, lca->rs, lca->p->e_private, lca->ca,
 		&bv, lback->bi_cf_ocs, &distproc_ocs[ 1 ] );
 
-	return;
+	lca->count++;
+
+	return 0;
 }
 
 static int
@@ -490,8 +489,6 @@ distproc_cfadd( Operation *op, SlapReply *rs, Entry *p, ConfigArgs *ca )
 	slap_overinst	*on = (slap_overinst *)pe->ce_bi;
 	ldap_distproc_t	*lc = (ldap_distproc_t *)on->on_bi.bi_private;
 	void		*priv = (void *)ca->be->be_private;
-	TAvlnode	*edge;
-	int		count = 0;
 
 	if ( lback->bi_cf_ocs ) {
 		ldap_distproc_cfadd_apply_t	lca = { 0 };
@@ -502,15 +499,10 @@ distproc_cfadd( Operation *op, SlapReply *rs, Entry *p, ConfigArgs *ca )
 		lca.ca = ca;
 		lca.count = 0;
 
-		ldap_distproc_cfadd_apply( lc->lc_common_li, op, rs, p, ca, count++ );
+		(void)ldap_distproc_cfadd_apply( (void *)lc->lc_common_li, (void *)&lca );
 
-		edge = ldap_tavl_end( lc->lc_lai.lai_tree, TAVL_DIR_LEFT );
-		while ( edge ) {
-			TAvlnode *next = ldap_tavl_next( edge, TAVL_DIR_RIGHT );
-			ldapinfo_t *li = (ldapinfo_t *)edge->avl_data;
-			ldap_distproc_cfadd_apply( li, op, rs, p, ca, count++ );
-			edge = next;
-		}
+		(void)avl_apply( lc->lc_lai.lai_tree, ldap_distproc_cfadd_apply,
+			&lca, 1, AVL_INORDER );
 
 		ca->be->be_private = priv;
 	}
@@ -680,7 +672,7 @@ private_destroy:;
 					goto private_destroy;
 				}
 
-				if ( ldap_tavl_insert( &lc->lc_lai.lai_tree,
+				if ( avl_insert( &lc->lc_lai.lai_tree,
 					(caddr_t)lc->lc_cfg_li,
 					ldap_distproc_uri_cmp, ldap_distproc_uri_dup ) )
 				{
@@ -704,6 +696,22 @@ enum db_which {
 
 	db_last
 };
+
+typedef struct ldap_distproc_db_apply_t {
+	BackendDB	*be;
+	BI_db_func	*func;
+} ldap_distproc_db_apply_t;
+
+static int
+ldap_distproc_db_apply( void *datum, void *arg )
+{
+	ldapinfo_t		*li = (ldapinfo_t *)datum;
+	ldap_distproc_db_apply_t	*lca = (ldap_distproc_db_apply_t *)arg;
+
+	lca->be->be_private = (void *)li;
+
+	return lca->func( lca->be, NULL );
+}
 
 static int
 ldap_distproc_db_func(
@@ -732,17 +740,14 @@ ldap_distproc_db_func(
 			}
 
 			if ( lc->lc_lai.lai_tree != NULL ) {
-				TAvlnode *edge = ldap_tavl_end( lc->lc_lai.lai_tree, TAVL_DIR_LEFT );
-				while ( edge ) {
-					TAvlnode *next = ldap_tavl_next( edge, TAVL_DIR_RIGHT );
-					ldapinfo_t *li = (ldapinfo_t *)edge->avl_data;
-					be->be_private = (void *)li;
-					rc = func( &db, NULL );
-					if ( rc == 1 ) {
-						break;
-					}
-					edge = next;
-				}
+				ldap_distproc_db_apply_t	lca;
+
+				lca.be = &db;
+				lca.func = func;
+
+				rc = avl_apply( lc->lc_lai.lai_tree,
+					ldap_distproc_db_apply, (void *)&lca,
+					1, AVL_INORDER ) != AVL_NOMORE;
 			}
 		}
 	}
@@ -779,7 +784,7 @@ ldap_distproc_db_destroy(
 	rc = ldap_distproc_db_func( be, db_destroy );
 
 	if ( lc ) {
-		ldap_tavl_free( lc->lc_lai.lai_tree, NULL );
+		avl_free( lc->lc_lai.lai_tree, NULL );
 		ldap_pvt_thread_mutex_destroy( &lc->lc_lai.lai_mutex );
 		ch_free( lc );
 	}
@@ -849,6 +854,22 @@ ldap_distproc_db_init_one(
 	return 0;
 }
 
+typedef struct ldap_distproc_conn_apply_t {
+	BackendDB	*be;
+	Connection	*conn;
+} ldap_distproc_conn_apply_t;
+
+static int
+ldap_distproc_conn_apply( void *datum, void *arg )
+{
+	ldapinfo_t		*li = (ldapinfo_t *)datum;
+	ldap_distproc_conn_apply_t	*lca = (ldap_distproc_conn_apply_t *)arg;
+
+	lca->be->be_private = (void *)li;
+
+	return lback->bi_connection_destroy( lca->be, lca->conn );
+}
+
 static int
 ldap_distproc_connection_destroy(
 	BackendDB *be,
@@ -858,22 +879,15 @@ ldap_distproc_connection_destroy(
 	slap_overinst		*on = (slap_overinst *) be->bd_info;
 	ldap_distproc_t		*lc = (ldap_distproc_t *)on->on_bi.bi_private;
 	void			*private = be->be_private;
+	ldap_distproc_conn_apply_t	lca;
 	int			rc;
-	TAvlnode		*edge;
 
 	be->be_private = NULL;
+	lca.be = be;
+	lca.conn = conn;
 	ldap_pvt_thread_mutex_lock( &lc->lc_lai.lai_mutex );
-	edge = ldap_tavl_end( lc->lc_lai.lai_tree, TAVL_DIR_LEFT );
-	while ( edge ) {
-		TAvlnode *next = ldap_tavl_next( edge, TAVL_DIR_RIGHT );
-		ldapinfo_t *li = (ldapinfo_t *)edge->avl_data;
-		be->be_private = (void *)li;
-		rc = lback->bi_connection_destroy( be, conn );
-		if ( rc == 1 ) {
-			break;
-		}
-		edge = next;
-	}
+	rc = avl_apply( lc->lc_lai.lai_tree, ldap_distproc_conn_apply,
+		(void *)&lca, 1, AVL_INORDER ) != AVL_NOMORE;
 	ldap_pvt_thread_mutex_unlock( &lc->lc_lai.lai_mutex );
 	be->be_private = private;
 

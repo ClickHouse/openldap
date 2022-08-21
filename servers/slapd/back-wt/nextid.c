@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2022 The OpenLDAP Foundation.
+ * Copyright 2002-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <ac/string.h>
 #include "back-wt.h"
-#include "slap-config.h"
+#include "config.h"
 
 int wt_next_id(BackendDB *be, ID *out){
     struct wt_info *wi = (struct wt_info *) be->be_private;
@@ -41,7 +41,8 @@ int wt_last_id( BackendDB *be, WT_SESSION *session, ID *out )
     rc = session->open_cursor(session, WT_TABLE_ID2ENTRY, NULL, NULL, &cursor);
     if(rc){
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_last_id: open_cursor failed: %s (%d)\n",
+			   LDAP_XSTRING(wt_last_id)
+			   ": open_cursor failed: %s (%d)\n",
 			   wiredtiger_strerror(rc), rc );
 		return rc;
     }
@@ -52,7 +53,8 @@ int wt_last_id( BackendDB *be, WT_SESSION *session, ID *out )
 		rc = cursor->get_key(cursor, &id);
 		if ( rc ) {
 			Debug( LDAP_DEBUG_ANY,
-				   "wt_last_id: get_key failed: %s (%d)\n",
+				   LDAP_XSTRING(wt_last_id)
+				   ": get_key failed: %s (%d)\n",
 				   wiredtiger_strerror(rc), rc );
 			return rc;
 		}
@@ -64,14 +66,16 @@ int wt_last_id( BackendDB *be, WT_SESSION *session, ID *out )
 		break;
 	default:
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_last_id: prev failed: %s (%d)\n",
+			   LDAP_XSTRING(wt_last_id)
+			   ": prev failed: %s (%d)\n",
 			   wiredtiger_strerror(rc), rc );
     }
 
     rc = cursor->close(cursor);
     if ( rc ) {
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_last_id: close failed: %s (%d)\n",
+			   LDAP_XSTRING(wt_last_id)
+			   ": close failed: %s (%d)\n",
 			   wiredtiger_strerror(rc), rc );
 		return rc;
     }

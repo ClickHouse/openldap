@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2010-2022 The OpenLDAP Foundation.
+ * Copyright 2010-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -281,7 +281,7 @@ vc_exop(
 
 		AC_MEMCPY( (char *)&tmp.conn, (const char *)cookie.bv_val, cookie.bv_len );
 		ldap_pvt_thread_mutex_lock( &vc_mutex );
-		conn = (vc_conn_t *)ldap_avl_find( vc_tree, (caddr_t)&tmp, vc_conn_cmp );
+		conn = (vc_conn_t *)avl_find( vc_tree, (caddr_t)&tmp, vc_conn_cmp );
 		if ( conn == NULL || ( conn != NULL && conn->refcnt != 0 ) ) {
 			conn = NULL;
 			ldap_pvt_thread_mutex_unlock( &vc_mutex );
@@ -289,14 +289,16 @@ vc_exop(
 			goto done;
 		}
 		conn->refcnt++;
-		operation_counter_init( conn->op, op->o_threadctx );
 		ldap_pvt_thread_mutex_unlock( &vc_mutex );
 
 	} else {
+		void *thrctx;
+
 		conn = (vc_conn_t *)SLAP_CALLOC( 1, sizeof( vc_conn_t ) );
 		conn->refcnt = 1;
 
-		connection_fake_init2( &conn->connbuf, &conn->opbuf, op->o_threadctx, 0 );
+		thrctx = ldap_pvt_thread_pool_context();
+		connection_fake_init2( &conn->connbuf, &conn->opbuf, thrctx, 0 );
 		conn->op = &conn->opbuf.ob_op;
 		snprintf( conn->op->o_log_prefix, sizeof( conn->op->o_log_prefix ),
 			"%s VERIFYCREDENTIALS", op->o_log_prefix );
@@ -374,7 +376,7 @@ done:;
 				conn->conn = conn;
 				conn->refcnt--;
 				ldap_pvt_thread_mutex_lock( &vc_mutex );
-				rc = ldap_avl_insert( &vc_tree, (caddr_t)conn,
+				rc = avl_insert( &vc_tree, (caddr_t)conn,
 					vc_conn_cmp, vc_conn_dup );
 				ldap_pvt_thread_mutex_unlock( &vc_mutex );
 				assert( rc == 0 );
@@ -390,7 +392,7 @@ done:;
 				vc_conn_t *tmp;
 
 				ldap_pvt_thread_mutex_lock( &vc_mutex );
-				tmp = ldap_avl_delete( &vc_tree, (caddr_t)conn, vc_conn_cmp );
+				tmp = avl_delete( &vc_tree, (caddr_t)conn, vc_conn_cmp );
 				ldap_pvt_thread_mutex_unlock( &vc_mutex );
 			}
 			SLAP_FREE( conn );

@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -108,8 +108,9 @@ ldap_ld_free(
 
 	/* free LDAP structure and outstanding requests/responses */
 	LDAP_MUTEX_LOCK( &ld->ld_req_mutex );
-	ldap_tavl_free( ld->ld_requests, ldap_do_free_request );
-	ld->ld_requests = NULL;
+	while ( ld->ld_requests != NULL ) {
+		ldap_free_request( ld, ld->ld_requests );
+	}
 	LDAP_MUTEX_UNLOCK( &ld->ld_req_mutex );
 	LDAP_MUTEX_LOCK( &ld->ld_conn_mutex );
 
@@ -174,12 +175,6 @@ ldap_ld_free(
 		ld->ld_options.ldo_defludp = NULL;
 	}
 
-	if ( ld->ld_options.ldo_local_ip_addrs.local_ip_addrs ) {
-		LDAP_FREE( ld->ld_options.ldo_local_ip_addrs.local_ip_addrs );
-		memset( & ld->ld_options.ldo_local_ip_addrs, 0,
-			sizeof( ldapsourceip ) );
-	}
-
 #ifdef LDAP_CONNECTIONLESS
 	if ( ld->ld_options.ldo_peer != NULL ) {
 		LDAP_FREE( ld->ld_options.ldo_peer );
@@ -191,11 +186,6 @@ ldap_ld_free(
 		ld->ld_options.ldo_cldapdn = NULL;
 	}
 #endif
-
-	if ( ld->ld_options.ldo_defbase != NULL ) {
-		LDAP_FREE( ld->ld_options.ldo_defbase );
-		ld->ld_options.ldo_defbase = NULL;
-	}
 
 #ifdef HAVE_CYRUS_SASL
 	if ( ld->ld_options.ldo_def_sasl_mech != NULL ) {

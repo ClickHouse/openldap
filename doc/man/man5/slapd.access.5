@@ -1,5 +1,5 @@
 .TH SLAPD.ACCESS 5 "RELEASEDATE" "OpenLDAP LDVERSION"
-.\" Copyright 1998-2022 The OpenLDAP Foundation All Rights Reserved.
+.\" Copyright 1998-2020 The OpenLDAP Foundation All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
 .\" $OpenLDAP$
 .SH NAME
@@ -18,7 +18,6 @@ daemon. This configuration file is also used by the SLAPD tools
 .BR slapcat (8),
 .BR slapdn (8),
 .BR slapindex (8),
-.BR slapmodify (8),
 and
 .BR slaptest (8).
 .LP
@@ -96,8 +95,6 @@ clause matches the accessor's properties, its
 and
 .B <control>
 clauses are evaluated.
-
-.LP
 Access control checking stops at the first match of the
 .B <what>
 and
@@ -113,26 +110,8 @@ clause list is implicitly terminated by a
 	by * none stop
 .fi
 .LP
-.B <control>
-clause.  This implicit
-.B <control>
-stops access directive evaluation with no more access privileges
-granted to anyone else.
-To stop access directive evaluation only when both
-.B <who>
-and
-.B <what>
-match, add an explicit
-.LP
-.nf
-	by * break
-.fi
-.LP
-to the end of the
-.B <who>
-clause list.
-
-.LP
+clause that results in stopping the access control with no access 
+privileges granted.
 Each
 .B <what>
 clause list is implicitly terminated by a
@@ -797,11 +776,7 @@ and
 .BR manage .
 Each access level implies all the preceding ones, thus 
 .B manage
-grants all access including administrative access. This access
-allows some modifications which would otherwise be prohibited by the
-LDAP data model or the directory schema, e.g. changing the
-structural objectclass of an entry, or modifying an operational
-attribute that is defined as not user modifiable.
+grants all access including administrative access.
 The 
 .BR write
 access is actually the combination of

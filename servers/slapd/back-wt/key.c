@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2002-2022 The OpenLDAP Foundation.
+ * Copyright 2002-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <ac/string.h>
 #include "back-wt.h"
-#include "slap-config.h"
+#include "config.h"
 #include "idl.h"
 
 /* read a key */
@@ -32,7 +32,7 @@ int
 wt_key_read(
 	Backend *be,
 	WT_CURSOR *cursor,
-	struct berval *bkey,
+	struct berval *k,
 	ID *ids,
 	WT_CURSOR **saved_cursor,
 	int get_flag
@@ -43,42 +43,33 @@ wt_key_read(
 	int exact;
 	WT_ITEM key2;
 	ID id;
-	int comp;
-	long scanned = 0;
 
 	Debug( LDAP_DEBUG_TRACE, "=> key_read\n" );
 
 	WT_IDL_ZERO(ids);
-	bv2ITEM(bkey, &key);
+
+	bv2ITEM(k, &key);
 	cursor->set_key(cursor, &key, 0);
 	rc = cursor->search_near(cursor, &exact);
-	switch( rc ){
-	case 0:
-		break;
-	case WT_NOTFOUND:
-		rc = LDAP_SUCCESS;
-		goto done;
-	default:
+	if( rc ){
 		Debug( LDAP_DEBUG_ANY,
-			   "wt_key_read: search_near failed: %s (%d)\n",
-			   wiredtiger_strerror(rc), rc);
+			   LDAP_XSTRING(wt_key_read)
+			   ": search_near failed: %s (%d)\n",
+			   wiredtiger_strerror(rc), rc );
 		goto done;
 	}
+
 	do {
-		scanned++;
 		rc = cursor->get_key(cursor, &key2, &id);
 		if( rc ){
 			Debug( LDAP_DEBUG_ANY,
-				   "wt_key_read: get_key failed: %s (%d)\n",
+				   LDAP_XSTRING(wt_key_read)
+				   ": get_key failed: %s (%d)\n",
 				   wiredtiger_strerror(rc), rc );
 			break;
 		}
-		comp = 0;
-		if (key.size != key2.size ||
-			(comp = memcmp(key2.data, key.data, key.size))) {
-			if(comp > 0){
-				break;
-			}
+
+		if (key.size != key2.size || memcmp(key.data, key2.data, key.size)) {
 			if(exact < 0){
 				rc = cursor->next(cursor);
 				if (rc) {
@@ -94,17 +85,17 @@ wt_key_read(
 		rc = cursor->next(cursor);
 	} while(rc == 0);
 
-	if ( rc == WT_NOTFOUND && exact == 0 ) {
+	if (rc == WT_NOTFOUND ) {
 		rc = LDAP_SUCCESS;
 	}
 
 done:
 	if( rc != LDAP_SUCCESS ) {
-		Debug( LDAP_DEBUG_TRACE, "<= wt_key_read: failed (%d) %ld scanned\n",
-			   rc, scanned );
+		Debug( LDAP_DEBUG_TRACE, "<= wt_key_read: failed (%d)\n",
+			   rc );
 	} else {
-		Debug( LDAP_DEBUG_TRACE, "<= wt_key_read %ld candidates %ld scanned\n",
-			   (long) WT_IDL_N(ids), scanned );
+		Debug( LDAP_DEBUG_TRACE, "<= wt_key_read %ld candidates\n",
+			   (long) WT_IDL_N(ids) );
 	}
 
 	return rc;
@@ -140,11 +131,10 @@ wt_key_change(
 		if ( rc == WT_NOTFOUND ) rc = 0;
 	}
 	if( rc ) {
-		if ( rc != WT_ROLLBACK ) {
-			Debug( LDAP_DEBUG_ANY,
-				   "wt_key_change: error: %s (%d)\n",
-				   wiredtiger_strerror(rc), rc);
-		}
+		Debug( LDAP_DEBUG_ANY,
+			   LDAP_XSTRING(wt_key_change)
+			   ": error: %s (%d)\n",
+			   wiredtiger_strerror(rc), rc );
 		return rc;
 	}
 

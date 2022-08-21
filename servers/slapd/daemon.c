@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * Portions Copyright 2007 by Howard Chu, Symas Corporation.
  * All rights reserved.
  *
@@ -40,10 +40,6 @@
 #include "lutil.h"
 
 #include "ldap_rq.h"
-
-#ifdef HAVE_SYSTEMD_SD_DAEMON_H
-#include <systemd/sd-daemon.h>
-#endif
 
 #ifdef HAVE_POLL
 #include <poll.h>
@@ -114,10 +110,6 @@ static volatile int waking;
 		(void)!tcp_write( SLAP_FD2SOCK(wake_sds[l][1]), "0", 1 ); \
 	} \
 } while (0)
-
-ldap_pvt_thread_mutex_t slapd_init_mutex;
-ldap_pvt_thread_cond_t slapd_init_cond;
-int slapd_ready = 0;
 
 volatile sig_atomic_t slapd_shutdown = 0;
 volatile sig_atomic_t slapd_gentle_shutdown = 0;
@@ -204,6 +196,12 @@ static slap_daemon_st *slap_daemon;
 # define SLAP_EVENT_INIT(t) do {\
     if (!events) { \
         events = ch_malloc(sizeof(*events) * SLAP_EVENT_MAX(t)); \
+        if (!events) { \
+            Debug(LDAP_DEBUG_ANY, \
+                "daemon: SLAP_EVENT_INIT: ch_malloc of events failed, wanted %d bytes\n", \
+                sizeof(*events) * SLAP_EVENT_MAX(t)); \
+                slapd_shutdown = 2; \
+        } \
     } \
 } while (0)
 
@@ -219,12 +217,35 @@ static slap_daemon_st *slap_daemon;
         kqc->sd_maxchanges = 256; /* will grow as needed */ \
         kq_nbytes = sizeof(*kqc->sd_changes) * kqc->sd_maxchanges; \
         kqc->sd_changes = ch_calloc(1, kq_nbytes); \
+        if (!kqc->sd_changes) { \
+            Debug(LDAP_DEBUG_ANY, \
+                  "daemon: SLAP_SOCK_INIT: ch_calloc of slap_daemon.sd_changes[%d] failed, wanted %d bytes, shutting down\n", \
+                  kq_i, kq_nbytes); \
+                  slapd_shutdown = 2; \
+        } \
     } \
     kq_nbytes = sizeof(*slap_daemon[t].sd_fdmodes) * dtblsize; \
     slap_daemon[t].sd_fdmodes = ch_calloc(1, kq_nbytes); \
+    if (!slap_daemon[t].sd_fdmodes) { \
+        Debug(LDAP_DEBUG_ANY, \
+            "daemon: SLAP_SOCK_INIT: ch_calloc of slap_daemon.sd_fdmodes failed, wanted %d bytes, shutting down\n", \
+            kq_nbytes); \
+        slapd_shutdown = 2; \
+    } \
     kq_nbytes = sizeof(*slap_daemon[t].sd_l) * dtblsize; \
     slap_daemon[t].sd_l = ch_calloc(1, kq_nbytes); \
+    if (!slap_daemon[t].sd_l) { \
+        Debug(LDAP_DEBUG_ANY, \
+            "daemon: SLAP_SOCK_INIT: ch_calloc of slap_daemon.sd_l failed, wanted %d bytes, shutting down\n", \
+            kq_nbytes); \
+        slapd_shutdown = 2; \
+    } \
     slap_daemon[t].sd_kq = kqueue(); \
+    if (slap_daemon[t].sd_kq < 0) { \
+        int saved_errno = errno; \
+        Debug(LDAP_DEBUG_ANY, "daemon: SLAP_SOCK_INIT: kqueue() failed, errno=%d, shutting down\n", saved_errno); \
+        slapd_shutdown = 2; \
+    } \
 } while (0)
 
 /* a kqueue fd obtained before a fork can't be used in child process.
@@ -290,6 +311,13 @@ static slap_daemon_st *slap_daemon;
         kqc->sd_maxchanges += kqc->sd_maxchanges; \
         kq_nbytes = sizeof(*kqc->sd_changes) * kqc->sd_maxchanges; \
         kqc->sd_changes = ch_realloc(kqc->sd_changes, kq_nbytes); \
+        if (!kqc->sd_changes) { \
+            Debug(LDAP_DEBUG_ANY, \
+                "daemon: SLAP_KQUEUE_CHANGE: ch_realloc of slap_daemon.sd_kqc[%d].sd_changes failed, wanted %d bytes, shutting down\n", \
+                slap_daemon[t].sd_changeidx, kq_nbytes); \
+            slapd_shutdown = 2; \
+            break; /* Don't want to do the EV_SET if sd_changes is NULL */ \
+        } \
     } \
     EV_SET(&kqc->sd_changes[kqc->sd_nchanges++], \
            (s), (filter), (flag), 0, 0, slap_daemon[t].sd_l[(s)]); \
@@ -1384,9 +1412,12 @@ slap_get_listener_addresses(
 
 #ifdef LDAP_PF_LOCAL
 	if ( port == 0 ) {
-		sap = *sal = ch_malloc(2 * sizeof(void *));
+		*sal = ch_malloc(2 * sizeof(void *));
+		if (*sal == NULL) return -1;
 
+		sap = *sal;
 		*sap = ch_malloc(sizeof(struct sockaddr_un));
+		if (*sap == NULL) goto errexit;
 		sap[1] = NULL;
 
 		if ( strlen(host) >
@@ -1425,7 +1456,10 @@ slap_get_listener_addresses(
 		for (n=2; (sai = sai->ai_next) != NULL; n++) {
 			/* EMPTY */ ;
 		}
-		sap = *sal = ch_calloc(n, sizeof(void *));
+		*sal = ch_calloc(n, sizeof(void *));
+		if (*sal == NULL) return -1;
+
+		sap = *sal;
 		*sap = NULL;
 
 		for ( sai=res; sai; sai=sai->ai_next ) {
@@ -1440,12 +1474,20 @@ slap_get_listener_addresses(
 #  ifdef LDAP_PF_INET6
 			case AF_INET6:
 				*sap = ch_malloc(sizeof(struct sockaddr_in6));
+				if (*sap == NULL) {
+					freeaddrinfo(res);
+					goto errexit;
+				}
 				*(struct sockaddr_in6 *)*sap =
 					*((struct sockaddr_in6 *)sai->ai_addr);
 				break;
 #  endif /* LDAP_PF_INET6 */
 			case AF_INET:
 				*sap = ch_malloc(sizeof(struct sockaddr_in));
+				if (*sap == NULL) {
+					freeaddrinfo(res);
+					goto errexit;
+				}
 				*(struct sockaddr_in *)*sap =
 					*((struct sockaddr_in *)sai->ai_addr);
 				break;
@@ -1481,10 +1523,15 @@ slap_get_listener_addresses(
 			for (n = 0; he->h_addr_list[n]; n++) /* empty */;
 		}
 
-		sap = *sal = ch_malloc((n+1) * sizeof(void *));
+		*sal = ch_malloc((n+1) * sizeof(void *));
+		if (*sal == NULL) return -1;
 
+		sap = *sal;
 		for ( i = 0; i<n; i++ ) {
-			sap[i] = ch_calloc(1, sizeof(struct sockaddr_in));
+			sap[i] = ch_malloc(sizeof(struct sockaddr_in));
+			if (*sap == NULL) goto errexit;
+
+			(void)memset( (void *)sap[i], '\0', sizeof(struct sockaddr_in) );
 			sap[i]->sa_family = AF_INET;
 			((struct sockaddr_in *)sap[i])->sin_port = htons(port);
 			AC_MEMCPY( &((struct sockaddr_in *)sap[i])->sin_addr,
@@ -1557,8 +1604,6 @@ slap_open_listener(
 	}
 #endif /* HAVE_TLS */
 
-	l.sl_is_proxied = ldap_pvt_url_scheme2proxied( lud->lud_scheme );
-
 #ifdef LDAP_TCP_BUFFER
 	l.sl_tcp_rmem = 0;
 	l.sl_tcp_wmem = 0;
@@ -1602,14 +1647,6 @@ slap_open_listener(
 		l.sl_perms = S_IRWXU | S_IRWXO;
 	}
 #endif /* LDAP_PF_LOCAL || SLAP_X_LISTENER_MOD */
-
-	if ( lud->lud_dn && lud->lud_dn[0] ) {
-		sprintf( (char *)url, "%s://%s/", lud->lud_scheme, lud->lud_host );
-		Debug( LDAP_DEBUG_ANY, "daemon: listener URL %s<junk> DN must be absent (%s)\n",
-			url, lud->lud_dn );
-		ldap_free_urldesc( lud );
-		return -1;
-	}
 
 	ldap_free_urldesc( lud );
 	if ( err ) {
@@ -1766,7 +1803,7 @@ slap_open_listener(
 		case AF_LOCAL: {
 			char *path = ((struct sockaddr_un *)*sal)->sun_path;
 			l.sl_name.bv_len = strlen(path) + STRLENOF("PATH=");
-			l.sl_name.bv_val = ch_malloc( l.sl_name.bv_len + 1 );
+			l.sl_name.bv_val = ber_memalloc( l.sl_name.bv_len + 1 );
 			snprintf( l.sl_name.bv_val, l.sl_name.bv_len + 1, 
 				"PATH=%s", path );
 		} break;
@@ -1784,7 +1821,7 @@ slap_open_listener(
 			if (!s) s = SLAP_STRING_UNKNOWN;
 			port = ntohs( ((struct sockaddr_in *)*sal) ->sin_port );
 			l.sl_name.bv_val =
-				ch_malloc( sizeof("IP=255.255.255.255:65535") );
+				ber_memalloc( sizeof("IP=255.255.255.255:65535") );
 			snprintf( l.sl_name.bv_val, sizeof("IP=255.255.255.255:65535"),
 				"IP=%s:%d", s, port );
 			l.sl_name.bv_len = strlen( l.sl_name.bv_val );
@@ -1799,7 +1836,7 @@ slap_open_listener(
 			if (!s) s = SLAP_STRING_UNKNOWN;
 			port = ntohs( ((struct sockaddr_in6 *)*sal)->sin6_port );
 			l.sl_name.bv_len = strlen(s) + sizeof("IP=[]:65535");
-			l.sl_name.bv_val = ch_malloc( l.sl_name.bv_len );
+			l.sl_name.bv_val = ber_memalloc( l.sl_name.bv_len );
 			snprintf( l.sl_name.bv_val, l.sl_name.bv_len, "IP=[%s]:%d", 
 				s, port );
 			l.sl_name.bv_len = strlen( l.sl_name.bv_val );
@@ -2089,6 +2126,78 @@ destroy_listeners( void )
 	slap_listeners = NULL;
 }
 
+void
+slap_sockaddrstr( Sockaddr *sa, struct berval *addrbuf )
+{
+	char *addr;
+	switch( sa->sa_addr.sa_family ) {
+#ifdef LDAP_PF_LOCAL
+	case AF_LOCAL:
+		addrbuf->bv_len = snprintf( addrbuf->bv_val, addrbuf->bv_len,
+			"PATH=%s", sa->sa_un_addr.sun_path );
+		break;
+#endif
+#ifdef LDAP_PF_INET6
+	case AF_INET6:
+		strcpy(addrbuf->bv_val, "IP=");
+		if ( IN6_IS_ADDR_V4MAPPED(&sa->sa_in6_addr.sin6_addr) ) {
+#if defined( HAVE_GETADDRINFO ) && defined( HAVE_INET_NTOP )
+			addr = (char *)inet_ntop( AF_INET,
+			   ((struct in_addr *)&sa->sa_in6_addr.sin6_addr.s6_addr[12]),
+			   addrbuf->bv_val+3, addrbuf->bv_len-3 );
+#else /* ! HAVE_GETADDRINFO || ! HAVE_INET_NTOP */
+			addr = inet_ntoa( *((struct in_addr *)
+					&sa->sa_in6_addr.sin6_addr.s6_addr[12]) );
+#endif /* ! HAVE_GETADDRINFO || ! HAVE_INET_NTOP */
+			if ( !addr ) addr = SLAP_STRING_UNKNOWN;
+			if ( addr != addrbuf->bv_val+3 ) {
+				addrbuf->bv_len = sprintf( addrbuf->bv_val+3, "%s:%d", addr,
+				 (unsigned) ntohs( sa->sa_in6_addr.sin6_port ) ) + 3;
+			} else {
+				int len = strlen( addr );
+				addrbuf->bv_len = sprintf( addr+len, ":%d",
+				 (unsigned) ntohs( sa->sa_in6_addr.sin6_port ) ) + len + 3;
+			}
+		} else {
+			addr = (char *)inet_ntop( AF_INET6,
+				      &sa->sa_in6_addr.sin6_addr,
+				      addrbuf->bv_val+4, addrbuf->bv_len-4 );
+			if ( !addr ) addr = SLAP_STRING_UNKNOWN;
+			if ( addr != addrbuf->bv_val+4 ) {
+				addrbuf->bv_len = sprintf( addrbuf->bv_val+3, "[%s]:%d", addr,
+				 (unsigned) ntohs( sa->sa_in6_addr.sin6_port ) ) + 3;
+			} else {
+				int len = strlen( addr );
+				addrbuf->bv_val[3] = '[';
+				addrbuf->bv_len = sprintf( addr+len, "]:%d",
+				 (unsigned) ntohs( sa->sa_in6_addr.sin6_port ) ) + len + 4;
+			}
+		}
+		break;
+#endif /* LDAP_PF_INET6 */
+	case AF_INET:
+		strcpy(addrbuf->bv_val, "IP=");
+#if defined( HAVE_GETADDRINFO ) && defined( HAVE_INET_NTOP )
+		addr = (char *)inet_ntop( AF_INET, &sa->sa_in_addr.sin_addr,
+			   addrbuf->bv_val+3, addrbuf->bv_len-3 );
+#else /* ! HAVE_GETADDRINFO || ! HAVE_INET_NTOP */
+		addr = inet_ntoa( sa->sa_in_addr.sin_addr );
+#endif /* ! HAVE_GETADDRINFO || ! HAVE_INET_NTOP */
+		if ( !addr ) addr = SLAP_STRING_UNKNOWN;
+		if ( addr != addrbuf->bv_val+3 ) {
+			addrbuf->bv_len = sprintf( addrbuf->bv_val+3, "%s:%d", addr,
+			 (unsigned) ntohs( sa->sa_in_addr.sin_port ) ) + 3;
+		} else {
+			int len = strlen( addr );
+			addrbuf->bv_len = sprintf( addr+len, ":%d",
+			 (unsigned) ntohs( sa->sa_in_addr.sin_port ) ) + len + 3;
+		}
+		break;
+	default:
+		addrbuf->bv_val[0] = '\0';
+	}
+}
+
 static int
 slap_listener(
 	Listener *sl )
@@ -2105,11 +2214,13 @@ slap_listener(
 #endif /* SLAPD_RLOOKUPS */
 
 	char	*dnsname = NULL;
+	const char *peeraddr = NULL;
 	/* we assume INET6_ADDRSTRLEN > INET_ADDRSTRLEN */
-	char peername[LDAP_IPADDRLEN];
+	char peername[SLAP_ADDRLEN];
 	struct berval peerbv = BER_BVC(peername);
 #ifdef LDAP_PF_LOCAL_SENDMSG
 	char peerbuf[8];
+	struct berval peerbv = BER_BVNULL;
 #endif
 	int cflag;
 	int tid;
@@ -2278,14 +2389,7 @@ slap_listener(
 	case AF_INET6:
 #  endif /* LDAP_PF_INET6 */
 	case AF_INET:
-		if ( sl->sl_is_proxied ) {
-			if ( !proxyp( sfd, &from ) ) {
-				Debug( LDAP_DEBUG_ANY, "slapd(%ld): proxyp failed\n", (long)sfd );
-				slapd_close( sfd );
-				return 0;
-			}
-		}
-		ldap_pvt_sockaddrstr( &from, &peerbv );
+		slap_sockaddrstr( &from, &peerbv );
 		break;
 
 	default:
@@ -2314,16 +2418,6 @@ slap_listener(
 #ifdef HAVE_TCPD
 		{
 			int rc;
-			char *peeraddr, *paend;
-			peeraddr = peerbv.bv_val + 3;
-			if ( *peeraddr == '[' ) {
-				peeraddr++;
-				paend = strrchr( peeraddr, ']' );
-			} else {
-				paend = strrchr( peeraddr, ':' );
-			}
-			if ( paend )
-				*paend = '\0';
 			ldap_pvt_thread_mutex_lock( &sd_tcpd_mutex );
 			rc = hosts_ctl("slapd",
 				dnsname != NULL ? dnsname : SLAP_STRING_UNKNOWN,
@@ -2339,12 +2433,6 @@ slap_listener(
 					peeraddr );
 				slapd_close(sfd);
 				return 0;
-			}
-			if ( paend ) {
-				if ( peeraddr[-1] == '[' )
-					*paend = ']';
-				else
-					*paend = ':';
 			}
 		}
 #endif /* HAVE_TCPD */
@@ -2413,18 +2501,6 @@ slap_listener_activate(
 }
 
 static void *
-slapd_rtask_trampoline(
-	void	*ctx,
-	void	*arg )
-{
-	struct re_s *rtask = arg;
-
-	/* invalidate pool_cookie */
-	rtask->pool_cookie = NULL;
-	return rtask->routine( ctx, arg );
-}
-
-static void *
 slapd_daemon_task(
 	void *ptr )
 {
@@ -2432,6 +2508,7 @@ slapd_daemon_task(
 	time_t last_idle_check = 0;
 	int ebadf = 0;
 	int tid = (slap_daemon_st *) ptr - slap_daemon;
+	int old_threads = slapd_daemon_threads;
 	char ebuf[128];
 
 #define SLAPD_IDLE_CHECK_LIMIT 4
@@ -2617,10 +2694,6 @@ slapd_daemon_task(
 				"daemon: listen(%s, 5) failed errno=%d (%s)\n",
 					slap_listeners[l]->sl_url.bv_val, err,
 					sock_errstr(err, ebuf, sizeof(ebuf)) );
-			ldap_pvt_thread_mutex_lock( &slapd_init_mutex );
-			slapd_shutdown = 2;
-			ldap_pvt_thread_cond_signal( &slapd_init_cond );
-			ldap_pvt_thread_mutex_unlock( &slapd_init_mutex );
 			return (void*)-1;
 		}
 
@@ -2628,20 +2701,12 @@ slapd_daemon_task(
 		if ( ber_pvt_socket_set_nonblock( SLAP_FD2SOCK( slap_listeners[l]->sl_sd ), 1 ) < 0 ) {
 			Debug( LDAP_DEBUG_ANY, "slapd_daemon_task: "
 				"set nonblocking on a listening socket failed\n" );
-			ldap_pvt_thread_mutex_lock( &slapd_init_mutex );
 			slapd_shutdown = 2;
-			ldap_pvt_thread_cond_signal( &slapd_init_cond );
-			ldap_pvt_thread_mutex_unlock( &slapd_init_mutex );
 			return (void*)-1;
 		}
 
 		slapd_add( slap_listeners[l]->sl_sd, 0, slap_listeners[l], -1 );
 	}
-
-	ldap_pvt_thread_mutex_lock( &slapd_init_mutex );
-	slapd_ready = 1;
-	ldap_pvt_thread_cond_signal( &slapd_init_cond );
-	ldap_pvt_thread_mutex_unlock( &slapd_init_mutex );
 
 #ifdef HAVE_NT_SERVICE_MANAGER
 	if ( started_event != NULL ) {
@@ -2787,7 +2852,7 @@ loop:
 					ldap_pvt_runqueue_resched( &slapd_rq, rtask, 0 );
 					ldap_pvt_thread_mutex_unlock( &slapd_rq.rq_mutex );
 					ldap_pvt_thread_pool_submit2( &connection_pool,
-						slapd_rtask_trampoline, (void *) rtask, &rtask->pool_cookie );
+						rtask->routine, (void *) rtask, &rtask->pool_cookie );
 					ldap_pvt_thread_mutex_lock( &slapd_rq.rq_mutex );
 				}
 				rtask = ldap_pvt_runqueue_next_sched( &slapd_rq, &cat );
@@ -3352,26 +3417,6 @@ slapd_daemon( void )
 			return rc;
 		}
 	}
-
-	ldap_pvt_thread_mutex_lock( &slapd_init_mutex );
-	while ( !slapd_ready && !slapd_shutdown ) {
-		ldap_pvt_thread_cond_wait( &slapd_init_cond, &slapd_init_mutex );
-	}
-	ldap_pvt_thread_mutex_unlock( &slapd_init_mutex );
-
-	if ( slapd_shutdown ) {
-		Debug( LDAP_DEBUG_ANY,
-			"listener initialization failed\n" );
-		return 1;
-	}
-
-#ifdef HAVE_SYSTEMD
-	rc = sd_notify( 1, "READY=1" );
-	if ( rc < 0 ) {
-		Debug( LDAP_DEBUG_ANY,
-			"systemd sd_notify failed (%d)\n", rc );
-	}
-#endif /* HAVE_SYSTEMD */
 
   	/* wait for the listener threads to complete */
 	for ( i=0; i<slapd_daemon_threads; i++ )

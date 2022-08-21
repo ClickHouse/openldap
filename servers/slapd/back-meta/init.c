@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2022 The OpenLDAP Foundation.
+ * Copyright 1999-2020 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * Portions Copyright 1999-2003 Howard Chu.
  * All rights reserved.
@@ -23,7 +23,7 @@
 #include <ac/socket.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "../back-ldap/back-ldap.h"
 #include "back-meta.h"
 
@@ -320,8 +320,8 @@ mapping_dst_free(
 void
 meta_back_map_free( struct ldapmap *lm )
 {
-	ldap_avl_free( lm->remap, mapping_dst_free );
-	ldap_avl_free( lm->map, mapping_free );
+	avl_free( lm->remap, mapping_dst_free );
+	avl_free( lm->map, mapping_free );
 	lm->remap = NULL;
 	lm->map = NULL;
 }
@@ -405,7 +405,7 @@ meta_back_db_destroy(
 		ldap_pvt_thread_mutex_lock( &mi->mi_conninfo.lai_mutex );
 
 		if ( mi->mi_conninfo.lai_tree ) {
-			ldap_tavl_free( mi->mi_conninfo.lai_tree, meta_back_conn_free );
+			avl_free( mi->mi_conninfo.lai_tree, meta_back_conn_free );
 		}
 		for ( i = LDAP_BACK_PCONN_FIRST; i < LDAP_BACK_PCONN_LAST; i++ ) {
 			while ( !LDAP_TAILQ_EMPTY( &mi->mi_conn_priv[ i ].mic_priv ) ) {
@@ -441,7 +441,7 @@ meta_back_db_destroy(
 
 		ldap_pvt_thread_mutex_lock( &mi->mi_cache.mutex );
 		if ( mi->mi_cache.tree ) {
-			ldap_avl_free( mi->mi_cache.tree, meta_dncache_free );
+			avl_free( mi->mi_cache.tree, meta_dncache_free );
 		}
 		
 		ldap_pvt_thread_mutex_unlock( &mi->mi_cache.mutex );

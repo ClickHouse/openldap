@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2022 The OpenLDAP Foundation.
+ * Copyright 2000-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,9 @@ mdb_modrdn( Operation	*op, SlapReply *rs )
 	Debug( LDAP_DEBUG_TRACE, "==>" LDAP_XSTRING(mdb_modrdn) "(%s,%s,%s)\n",
 		op->o_req_dn.bv_val,op->oq_modrdn.rs_newrdn.bv_val,
 		op->oq_modrdn.rs_newSup ? op->oq_modrdn.rs_newSup->bv_val : "NULL" );
+
+	if( op->o_txnSpec && txn_preop( op, rs ))
+		return rs->sr_err;
 
 	ctrls[num_ctrls] = NULL;
 

@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -100,9 +100,9 @@ ldap_back_map_init ( struct ldapmap *lm, struct ldapmapping **m )
 	mapping[1].src = mapping[0].src;
 	mapping[1].dst = mapping[0].dst;
 
-	ldap_avl_insert( &lm->map, (caddr_t)&mapping[0], 
+	avl_insert( &lm->map, (caddr_t)&mapping[0], 
 			mapping_cmp, mapping_dup );
-	ldap_avl_insert( &lm->remap, (caddr_t)&mapping[1], 
+	avl_insert( &lm->remap, (caddr_t)&mapping[1], 
 			mapping_cmp, mapping_dup );
 	*m = mapping;
 }
@@ -133,7 +133,7 @@ ldap_back_mapping ( struct ldapmap *map, struct berval *s, struct ldapmapping **
 	}
 
 	fmapping.src = *s;
-	*m = (struct ldapmapping *)ldap_avl_find( tree, (caddr_t)&fmapping, mapping_cmp );
+	*m = (struct ldapmapping *)avl_find( tree, (caddr_t)&fmapping, mapping_cmp );
 	if ( *m == NULL ) {
 		return map->drop_missing;
 	}

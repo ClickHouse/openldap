@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -233,7 +233,6 @@ AVA_Sort( LDAPRDN rdn, int nAVAs )
 {
 	LDAPAVA	*ava_i;
 	int		i;
-	int		rc = LDAP_SUCCESS;
 
 	assert( rdn != NULL );
 
@@ -251,7 +250,7 @@ AVA_Sort( LDAPRDN rdn, int nAVAs )
 			/* RFC4512 does not allow multiple AVAs
 			 * with the same attribute type in RDN (ITS#5968) */
 			if ( a == 0 )
-				rc = LDAP_INVALID_DN_SYNTAX;
+				return LDAP_INVALID_DN_SYNTAX;
 
 			if ( a > 0 )
 				break;
@@ -260,7 +259,7 @@ AVA_Sort( LDAPRDN rdn, int nAVAs )
 		}
 		rdn[ j+1 ] = ava_i;
 	}
-	return rc;
+	return LDAP_SUCCESS;
 }
 
 static int
@@ -839,9 +838,7 @@ dnRelativeMatch(
 			match = memcmp( value->bv_val, asserted->bv_val, 
 				value->bv_len );
 		} else {
-			if ( BER_BVISEMPTY( asserted ) ) {
-				match = 0;
-			} else if ( DN_SEPARATOR(
+			if( DN_SEPARATOR(
 				value->bv_val[value->bv_len - asserted->bv_len - 1] ))
 			{
 				match = memcmp(
@@ -867,9 +864,7 @@ dnRelativeMatch(
 		if( asserted->bv_len >= value->bv_len ) {
 			match = -1;
 		} else {
-			if ( BER_BVISEMPTY( asserted ) ) {
-				match = 0;
-			} else if ( DN_SEPARATOR(
+			if( DN_SEPARATOR(
 				value->bv_val[value->bv_len - asserted->bv_len - 1] ))
 			{
 				match = memcmp(

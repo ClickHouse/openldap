@@ -1,10 +1,10 @@
-/* include/portable.hin.  Generated from configure.ac by autoheader.  */
+/* include/portable.hin.  Generated from configure.in by autoheader.  */
 
 
 /* begin of portable.h.pre */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation
+ * Copyright 1998-2020 The OpenLDAP Foundation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,9 +84,6 @@
 /* define if you have AIX security lib */
 #undef HAVE_AIX_SECURITY
 
-/* Define to 1 if you have the <argon2.h> header file. */
-#undef HAVE_ARGON2_H
-
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
 
@@ -104,9 +101,6 @@
 
 /* Define to 1 if you have the `chroot' function. */
 #undef HAVE_CHROOT
-
-/* Define to 1 if you have the `clock_gettime' function. */
-#undef HAVE_CLOCK_GETTIME
 
 /* Define to 1 if you have the `closesocket' function. */
 #undef HAVE_CLOSESOCKET
@@ -280,12 +274,6 @@
 /* define if your system supports kqueue */
 #undef HAVE_KQUEUE
 
-/* define if you have libargon2 */
-#undef HAVE_LIBARGON2
-
-/* define if you have -levent */
-#undef HAVE_LIBEVENT
-
 /* Define to 1 if you have the `gen' library (-lgen). */
 #undef HAVE_LIBGEN
 
@@ -309,9 +297,6 @@
 
 /* Define to 1 if you have the `socket' library (-lsocket). */
 #undef HAVE_LIBSOCKET
-
-/* define if you have libsodium */
-#undef HAVE_LIBSODIUM
 
 /* Define to 1 if you have the <libutil.h> header file. */
 #undef HAVE_LIBUTIL_H
@@ -463,6 +448,9 @@
 /* define if you have res_query() */
 #undef HAVE_RES_QUERY
 
+/* define if OpenSSL needs RSAref */
+#undef HAVE_RSAREF
+
 /* Define to 1 if you have the <sasl.h> header file. */
 #undef HAVE_SASL_H
 
@@ -528,9 +516,6 @@
 
 /* Define to 1 if you have the `snprintf' function. */
 #undef HAVE_SNPRINTF
-
-/* Define to 1 if you have the <sodium.h> header file. */
-#undef HAVE_SODIUM_H
 
 /* if you have spawnlp() */
 #undef HAVE_SPAWNLP
@@ -639,12 +624,6 @@
 
 /* Define to 1 if you have the <syslog.h> header file. */
 #undef HAVE_SYSLOG_H
-
-/* define if you have systemd */
-#undef HAVE_SYSTEMD
-
-/* Define to 1 if you have the <systemd/sd-daemon.h> header file. */
-#undef HAVE_SYSTEMD_SD_DAEMON_H
 
 /* Define to 1 if you have the <sys/devpoll.h> header file. */
 #undef HAVE_SYS_DEVPOLL_H
@@ -794,6 +773,9 @@
 
 /* Define to 1 if you have the <winsock.h> header file. */
 #undef HAVE_WINSOCK_H
+
+/* Define to 1 if you have the <wiredtiger.h> header file. */
+#undef HAVE_WIREDTIGER_H
 
 /* Define to 1 if you have the `write' function. */
 #undef HAVE_WRITE
@@ -987,14 +969,8 @@
 /* define for Dynamic List overlay */
 #undef SLAPD_OVER_DYNLIST
 
-/* define for Home Directory Management overlay */
-#undef SLAPD_OVER_HOMEDIR
-
 /* define for Reverse Group Membership overlay */
 #undef SLAPD_OVER_MEMBEROF
-
-/* define for OTP 2-factor Authentication overlay */
-#undef SLAPD_OVER_OTP
 
 /* define for Password Policy overlay */
 #undef SLAPD_OVER_PPOLICY
@@ -1004,9 +980,6 @@
 
 /* define for Referential Integrity overlay */
 #undef SLAPD_OVER_REFINT
-
-/* define for Deferred Authentication overlay */
-#undef SLAPD_OVER_REMOTEAUTH
 
 /* define for Return Code overlay */
 #undef SLAPD_OVER_RETCODE
@@ -1038,14 +1011,14 @@
 /* define to support PERL backend */
 #undef SLAPD_PERL
 
-/* define for Argon2 Password hashing module */
-#undef SLAPD_PWMOD_PW_ARGON2
-
 /* define to support relay backend */
 #undef SLAPD_RELAY
 
 /* define to support reverse lookups */
 #undef SLAPD_RLOOKUPS
+
+/* define to support SHELL backend */
+#undef SLAPD_SHELL
 
 /* define to support SOCK backend */
 #undef SLAPD_SOCK

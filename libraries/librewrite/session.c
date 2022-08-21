@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2000-2022 The OpenLDAP Foundation.
+ * Copyright 2000-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,7 +88,7 @@ rewrite_session_init(
 #endif /* USE_REWRITE_LDAP_PVT_THREADS */
 
 	tmp.ls_cookie = ( void * )cookie;
-	session = ( struct rewrite_session * )ldap_avl_find( info->li_cookies, 
+	session = ( struct rewrite_session * )avl_find( info->li_cookies, 
 			( caddr_t )&tmp, rewrite_cookie_cmp );
 	if ( session ) {
 		session->ls_count++;
@@ -122,7 +122,7 @@ rewrite_session_init(
 	}
 #endif /* USE_REWRITE_LDAP_PVT_THREADS */
 
-	rc = ldap_avl_insert( &info->li_cookies, ( caddr_t )session,
+	rc = avl_insert( &info->li_cookies, ( caddr_t )session,
 			rewrite_cookie_cmp, rewrite_cookie_dup );
 	info->li_num_cookies++;
 
@@ -161,7 +161,7 @@ rewrite_session_find(
 #ifdef USE_REWRITE_LDAP_PVT_THREADS
 	ldap_pvt_thread_rdwr_rlock( &info->li_cookies_mutex );
 #endif /* USE_REWRITE_LDAP_PVT_THREADS */
-	session = ( struct rewrite_session * )ldap_avl_find( info->li_cookies,
+	session = ( struct rewrite_session * )avl_find( info->li_cookies,
 			( caddr_t )&tmp, rewrite_cookie_cmp );
 #ifdef USE_REWRITE_LDAP_PVT_THREADS
 	if ( session ) {
@@ -376,7 +376,7 @@ rewrite_session_delete(
 	 * There is nothing to delete in the return value
 	 */
 	tmp.ls_cookie = ( void * )cookie;
-	ldap_avl_delete( &info->li_cookies, ( caddr_t )&tmp, rewrite_cookie_cmp );
+	avl_delete( &info->li_cookies, ( caddr_t )&tmp, rewrite_cookie_cmp );
 
 	free( session );
 
@@ -407,7 +407,7 @@ rewrite_session_destroy(
 	 * Should call per-session destruction routine ...
 	 */
 	
-	count = ldap_avl_free( info->li_cookies, rewrite_session_free );
+	count = avl_free( info->li_cookies, rewrite_session_free );
 	info->li_cookies = NULL;
 
 #if 0

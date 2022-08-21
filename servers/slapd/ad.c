@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -546,7 +546,7 @@ int ad_inlist(
 			}
 
 			/*
-			 * EXTENSION: if requested description is preceded by
+			 * EXTENSION: if requested description is preceeded by
 			 * a '-' character, do not match on subtypes.
 			 */
 			if ( attrs->an_name.bv_val[0] == '-' ) {

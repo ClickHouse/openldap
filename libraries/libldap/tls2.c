@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -165,7 +165,7 @@ ldap_pvt_tls_destroy( void )
  * Called once per implementation.
  */
 static int
-tls_init(tls_impl *impl, int do_threads )
+tls_init(tls_impl *impl )
 {
 	static int tls_initialized = 0;
 
@@ -177,12 +177,9 @@ tls_init(tls_impl *impl, int do_threads )
 
 	if ( impl->ti_inited++ ) return 0;
 
-	if ( do_threads ) {
 #ifdef LDAP_R_COMPILE
-		impl->ti_thr_init();
+	impl->ti_thr_init();
 #endif
-	}
-
 	return impl->ti_tls_init();
 }
 
@@ -190,9 +187,9 @@ tls_init(tls_impl *impl, int do_threads )
  * Initialize TLS subsystem. Called once per implementation.
  */
 int
-ldap_pvt_tls_init( int do_threads )
+ldap_pvt_tls_init( void )
 {
-	return tls_init( tls_imp, do_threads );
+	return tls_init( tls_imp );
 }
 
 /*
@@ -208,7 +205,7 @@ ldap_int_tls_init_ctx( struct ldapoptions *lo, int is_server )
 	if ( lo->ldo_tls_ctx )
 		return 0;
 
-	tls_init( ti, 0 );
+	tls_init( ti );
 
 	if ( is_server && !lts.lt_certfile && !lts.lt_keyfile &&
 		!lts.lt_cacertfile && !lts.lt_cacertdir &&
@@ -345,7 +342,7 @@ ldap_int_tls_connect( LDAP *ld, LDAPConn *conn, const char *host )
 	Sockbuf *sb = conn->lconn_sb;
 	int	err;
 	tls_session	*ssl = NULL;
-	const char *sni = host;
+	char *sni = (char *)host;
 
 	if ( HAS_TLS( sb )) {
 		ber_sockbuf_ctrl( sb, LBER_SB_OPT_GET_SSL, (void *)&ssl );
@@ -385,8 +382,8 @@ ldap_int_tls_connect( LDAP *ld, LDAPConn *conn, const char *host )
 	 */
 	{
 		int numeric = 1;
-		unsigned char *c;
-		for ( c = (unsigned char *)sni; *c; c++ ) {
+		char *c;
+		for ( c = sni; *c; c++ ) {
 			if ( *c == ':' )	/* IPv6 address */
 				break;
 			if ( *c == '.' )
@@ -615,7 +612,6 @@ ldap_pvt_tls_config( LDAP *ld, int option, const char *arg )
 			return ldap_pvt_tls_set_option( ld, option, &i );
 		}
 		return -1;
-	case LDAP_OPT_X_TLS_PROTOCOL_MAX:
 	case LDAP_OPT_X_TLS_PROTOCOL_MIN: {
 		char *next;
 		long l;
@@ -734,9 +730,6 @@ ldap_pvt_tls_get_option( LDAP *ld, int option, void *arg )
 		break;
 	case LDAP_OPT_X_TLS_PROTOCOL_MIN:
 		*(int *)arg = lo->ldo_tls_protocol_min;
-		break;
-	case LDAP_OPT_X_TLS_PROTOCOL_MAX:
-		*(int *)arg = lo->ldo_tls_protocol_max;
 		break;
 	case LDAP_OPT_X_TLS_RANDOM_FILE:
 		*(char **)arg = lo->ldo_tls_randfile ?
@@ -965,10 +958,6 @@ ldap_pvt_tls_set_option( LDAP *ld, int option, void *arg )
 		if ( !arg ) return -1;
 		lo->ldo_tls_protocol_min = *(int *)arg;
 		return 0;
-	case LDAP_OPT_X_TLS_PROTOCOL_MAX:
-		if ( !arg ) return -1;
-		lo->ldo_tls_protocol_max = *(int *)arg;
-		return 0;
 	case LDAP_OPT_X_TLS_RANDOM_FILE:
 		if ( ld != NULL )
 			return -1;
@@ -1113,7 +1102,7 @@ ldap_int_tls_start ( LDAP *ld, LDAPConn *conn, LDAPURLDesc *srv )
 		host = "localhost";
 	}
 
-	(void) tls_init( tls_imp, 0 );
+	(void) tls_init( tls_imp );
 
 	/*
 	 * Use non-blocking io during SSL Handshake when a timeout is configured
@@ -1510,19 +1499,11 @@ ldap_X509dn2bv( void *x509_name, struct berval *bv, LDAPDN_rewrite_func *func,
 		for ( tag = ber_first_element( ber, &len, &rdn_end );
 			tag == LBER_SEQUENCE;
 			tag = ber_next_element( ber, &len, rdn_end )) {
-			if ( rdn_end > dn_end )
-				return LDAP_DECODING_ERROR;
 			tag = ber_skip_tag( ber, &len );
 			ber_skip_data( ber, len );
 			navas++;
 		}
 	}
-
-	/* Rewind and prepare to extract */
-	ber_rewind( ber );
-	tag = ber_first_element( ber, &len, &dn_end );
-	if ( tag != LBER_SET )
-		return LDAP_DECODING_ERROR;
 
 	/* Allocate the DN/RDN/AVA stuff as a single block */    
 	dnsize = sizeof(LDAPRDN) * (nrdns+1);
@@ -1535,12 +1516,16 @@ ldap_X509dn2bv( void *x509_name, struct berval *bv, LDAPDN_rewrite_func *func,
 	} else {
 		newDN = (LDAPDN)(char *)ptrs;
 	}
-
+	
 	newDN[nrdns] = NULL;
 	newRDN = (LDAPRDN)(newDN + nrdns+1);
 	newAVA = (LDAPAVA *)(newRDN + navas + nrdns);
 	baseAVA = newAVA;
 
+	/* Rewind and start extracting */
+	ber_rewind( ber );
+
+	tag = ber_first_element( ber, &len, &dn_end );
 	for ( i = nrdns - 1; i >= 0; i-- ) {
 		newDN[i] = newRDN;
 
@@ -1634,10 +1619,6 @@ allocd:
 				/* X.690 bitString value converted to RFC4517 Bit String */
 				rc = der_to_ldap_BitString( &Val, &newAVA->la_value );
 				goto allocd;
-			case LBER_DEFAULT:
-				/* decode error */
-				rc = LDAP_DECODING_ERROR;
-				goto nomem;
 			default:
 				/* Not a string type at all */
 				newAVA->la_flags = 0;

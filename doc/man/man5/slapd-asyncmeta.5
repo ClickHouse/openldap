@@ -1,5 +1,5 @@
 .TH SLAPD-ASYNCMETA 5 "RELEASEDATE" "OpenLDAP LDVERSION"
-.\" Copyright 2016-2022 The OpenLDAP Foundation.
+.\" Copyright 2016-2020 The OpenLDAP Foundation.
 .\" Portions Copyright 2016 Symas Corporation.
 .\" Copying restrictions apply.  See the COPYRIGHT file.
 .\" $OpenLDAP$
@@ -36,11 +36,10 @@ maintains the functionality of
 and has a largely similar codebase,
 some changes in operation and some new configuration directives have been
 added. Some configuration options, such as
-.B conn\-pool\-max ,
-.B conn\-ttl ,
-.B single\-conn ,
+.B conn-ttl,
+.B single-conn
 and
-.B use\-temporary\-conn
+.B use-temporary-conn
 have been removed, as they are no longer relevant.
 .LP
 .B New connection handling:
@@ -127,14 +126,14 @@ Specify the number of consecutive timed out requests,
 after which the connection will be considered faulty and dropped.
 
 .TP
-.B max\-pending\-ops <number>
+.B max-pending-ops <number>
 The maximum number of pending requests stored in a connection's queue.
 The default is 128. When this number is exceeded,
 .B LDAP_BUSY
 will be returned to the client.
 
 .TP
-.B max\-target\-conns <number>
+.B max-target-conns <number>
 The maximum number of connections per target. Unlike
 .B slapd\-meta(5),
 no new connections will be created
@@ -243,7 +242,8 @@ check permissions.
 .TP
 .B acl\-passwd <password>
 Password used with the
-.B acl\-authcDN
+.B
+acl\-authcDN
 above.
 
 .TP
@@ -367,14 +367,6 @@ the
 parameter is ignored otherwise, and system-wide settings are used.
 
 .TP
-.B tcp\-user\-timeout  <milliseconds>
-If non-zero, corresponds to the
-.B TCP_USER_TIMEOUT
-set on the target connections, overriding the operating system setting.
-Only some systems support the customization of this parameter, it is
-ignored otherwise and system-wide settings are used.
-
-.TP
 .B map "{attribute|objectclass} [<local name>|*] {<foreign name>|*}"
 This maps object classes and attributes as in the LDAP backend.
 See
@@ -446,51 +438,20 @@ Operations can be
 
 \fB<op> ::= bind, add, delete, modrdn, modify, compare, search\fP
 
-By default, the timeout for all operations is 2 seconds.
-
 See
 .B slapd\-meta(5)
 for details.
 
 .TP
-.B tls {none|[try\-]start|[try\-]propagate|ldaps}
-B [starttls=no]
-.B [tls_cert=<file>]
-.B [tls_key=<file>]
-.B [tls_cacert=<file>]
-.B [tls_cacertdir=<path>]
-.B [tls_reqcert=never|allow|try|demand]
-.B [tls_reqsan=never|allow|try|demand]
-.B [tls_cipher_suite=<ciphers>]
-.B [tls_ecname=<names>]
-.B [tls_crlcheck=none|peer|all]
-.RS
-Specify TLS settings regular connections.
-
-If the first parameter is not "none" then this configures the TLS
-settings to be used for regular connections.
-The StartTLS extended operation will be used when establishing the
-connection unless the URI directive protocol scheme is \fBldaps://\fP.
-In that case this keyword may only be set to "ldaps" and the StartTLS
-operation will not be used.
-
-With \fBpropagate\fP, the proxy issues the StartTLS operation only if
-the original connection has a TLS layer set up.
+.B tls {[try\-]start|[try\-]propagate}
+execute the StartTLS extended operation when the connection is initialized;
+only works if the URI directive protocol scheme is not \fBldaps://\fP.
+\fBpropagate\fP issues the StartTLS operation only if the original
+connection did.
 The \fBtry\-\fP prefix instructs the proxy to continue operations
-if the StartTLS operation failed; its use is \fBnot\fP recommended.
-
-The TLS settings default to the same as the main slapd TLS settings,
-except for
-.B tls_reqcert
-which defaults to "demand",
-.B tls_reqsan
-which defaults to "allow", and
-.B starttls
-which is overshadowed by the first keyword and thus ignored.
-
+if the StartTLS operation failed; its use is highly deprecated.
 If set before any target specification, it affects all targets, unless
 overridden by any per-target directive.
-.RE
 
 .SH SCENARIOS
 See
@@ -522,8 +483,8 @@ ETCDIR/slapd.conf
 default slapd configuration file
 .SH SEE ALSO
 .BR slapd.conf (5),
-.BR slapd\-ldap (5),
 .BR slapd\-meta (5),
+.BR slapd\-ldap (5),
 .BR slapo\-pcache (5),
 .BR slapd (8),
 .BR regex (7),

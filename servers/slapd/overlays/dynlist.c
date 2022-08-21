@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2003-2022 The OpenLDAP Foundation.
+ * Copyright 2003-2020 The OpenLDAP Foundation.
  * Portions Copyright 2004-2005 Pierangelo Masarati.
  * Portions Copyright 2008 Emmanuel Dreyfus.
  * All rights reserved.
@@ -33,7 +33,7 @@
 #include <ac/string.h>
 
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 #include "lutil.h"
 
 static AttributeDescription *ad_dgIdentity, *ad_dgAuthz;
@@ -350,7 +350,6 @@ dynlist_urlmembers( Operation *op, dynlist_name_t *dyn, slap_callback *sc )
 	o.ors_tlimit = SLAP_NO_LIMIT;
 	o.ors_slimit = SLAP_NO_LIMIT;
 	o.ors_attrs = NULL;
-	memset( o.o_ctrlflag, 0, sizeof( o.o_ctrlflag ));
 	o.o_callback = sc;
 
 	for (i=0; i<dyn->dy_numuris; i++) {
@@ -382,8 +381,8 @@ dynlist_nested_memberOf( Entry *e, AttributeDescription *ad, TAvlnode *sups )
 	Attribute *a;
 
 	a = attr_find( e->e_attrs, ad );
-	for ( ptr = ldap_tavl_end( sups, TAVL_DIR_LEFT ); ptr;
-		ptr = ldap_tavl_next( ptr, TAVL_DIR_RIGHT )) {
+	for ( ptr = tavl_end( sups, TAVL_DIR_LEFT ); ptr;
+		ptr = tavl_next( ptr, TAVL_DIR_RIGHT )) {
 		dyn = ptr->avl_data;
 		if ( a ) {
 			unsigned slot;
@@ -447,10 +446,10 @@ dynlist_nested_member( Operation *op, dynlist_member_t *dm, TAvlnode *subs )
 	if ( !a )
 		return;
 
-	for ( ptr = ldap_tavl_end( subs, TAVL_DIR_LEFT ); ptr;
-		ptr = ldap_tavl_next( ptr, TAVL_DIR_RIGHT )) {
+	for ( ptr = tavl_end( subs, TAVL_DIR_LEFT ); ptr;
+		ptr = tavl_next( ptr, TAVL_DIR_RIGHT )) {
 		dyn = ptr->avl_data;
-		if ( ldap_tavl_insert( &dm->dm_groups, dyn, dynlist_ptr_cmp, ldap_avl_dup_error ))
+		if ( tavl_insert( &dm->dm_groups, dyn, dynlist_ptr_cmp, avl_dup_error ))
 			continue;
 		if ( overlay_entry_get_ov( op, &dyn->dy_name, NULL, NULL, 0, &ne, on ) != LDAP_SUCCESS || ne == NULL )
 			continue;
@@ -548,7 +547,6 @@ dynlist_prepare_entry( Operation *op, SlapReply *rs, dynlist_info_t *dli, dynlis
 	o.ors_limit = NULL;
 	o.ors_tlimit = SLAP_NO_LIMIT;
 	o.ors_slimit = SLAP_NO_LIMIT;
-	memset( o.o_ctrlflag, 0, sizeof( o.o_ctrlflag ));
 
 	for ( url = a->a_nvals; !BER_BVISNULL( url ); url++ ) {
 		LDAPURLDesc	*lud = NULL;
@@ -764,7 +762,7 @@ checkdyn:
 					dm.dm_ad = dlm->dlm_member_ad;
 					dynlist_nested_member( op, &dm, dyn->dy_subs );
 					if ( dm.dm_groups )
-						ldap_tavl_free( dm.dm_groups, NULL );
+						tavl_free( dm.dm_groups, NULL );
 				}
 			}
 		}
@@ -887,13 +885,6 @@ dynlist_compare( Operation *op, SlapReply *rs )
 				 * the assertion is FALSE rather than
 				 * UNDEFINED */
 				rs->sr_err = LDAP_COMPARE_FALSE;
-
-				/* If also using static groups, fallback to
-				 * vanilla compare
-				 */
-				if ( dlm->dlm_static_oc )
-					return SLAP_CB_CONTINUE;
-
 				break;
 			}
 
@@ -1096,7 +1087,7 @@ dynlist_search1resp( Operation *op, SlapReply *rs )
 			if ( b )
 				dyn->dy_staticmember = ds->ds_dlm->dlm_member_ad;
 
-			if ( ldap_tavl_insert( &ds->ds_names, dyn, dynlist_avl_cmp, ldap_avl_dup_error )) {
+			if ( tavl_insert( &ds->ds_names, dyn, dynlist_avl_cmp, avl_dup_error )) {
 				for (i=dyn->dy_numuris-1; i>=0; i--) {
 					ludp = dyn->dy_uris[i];
 					if ( ludp->lud_filter ) {
@@ -1210,11 +1201,15 @@ dynlist_filter_stgroup( Operation *op, Filter *n, Attribute *a )
 
 	if ( a->a_numvals == 1 && n->f_choice == SLAPD_FILTER_COMPUTED ) {
 		dnf = n;
+		dnf->f_next = NULL;
 	} else {
 		orf = n;
 		if ( n->f_choice != LDAP_FILTER_OR ) {
+			dnf = op->o_tmpalloc( sizeof(Filter), op->o_tmpmemctx );
+			*dnf = *n;
 			orf->f_choice = LDAP_FILTER_OR;
-			orf->f_list = NULL;
+			orf->f_next = NULL;
+			orf->f_list = dnf;
 		}
 		dnf = op->o_tmpalloc( sizeof(Filter), op->o_tmpmemctx );
 		dnf->f_next = orf->f_list;
@@ -1246,7 +1241,7 @@ dynlist_filter_group( Operation *op, dynlist_name_t *dyn, Filter *n, dynlist_sea
 	Attribute *a;
 	int rc = -1;
 
-	if ( ldap_tavl_insert( &ds->ds_fnodes, dyn, dynlist_ptr_cmp, ldap_avl_dup_error ))
+	if ( tavl_insert( &ds->ds_fnodes, dyn, dynlist_ptr_cmp, avl_dup_error ))
 		return 0;
 
 	if ( overlay_entry_get_ov( op, &dyn->dy_name, NULL, NULL, 0, &e, on ) !=
@@ -1267,8 +1262,8 @@ dynlist_filter_group( Operation *op, dynlist_name_t *dyn, Filter *n, dynlist_sea
 	overlay_entry_release_ov( op, e, 0, on );
 	if ( dyn->dy_subs && !rc ) {
 		TAvlnode *ptr;
-		for ( ptr = ldap_tavl_end( dyn->dy_subs, TAVL_DIR_LEFT ); ptr;
-			ptr = ldap_tavl_next( ptr, TAVL_DIR_RIGHT )) {
+		for ( ptr = tavl_end( dyn->dy_subs, TAVL_DIR_LEFT ); ptr;
+			ptr = tavl_next( ptr, TAVL_DIR_RIGHT )) {
 			dyn = ptr->avl_data;
 			rc = dynlist_filter_group( op, dyn, n, ds );
 			if ( rc )
@@ -1301,9 +1296,9 @@ dynlist_filter_dup( Operation *op, Filter *f, AttributeDescription *ad, dynlist_
 		break;
 
 	case LDAP_FILTER_EQUALITY:
+		n->f_choice = SLAPD_FILTER_COMPUTED;
 		if ( f->f_av_desc == ad ) {
-			dynlist_name_t *dyn = ldap_tavl_find( ds->ds_names, &f->f_av_value, dynlist_avl_cmp );
-			n->f_choice = SLAPD_FILTER_COMPUTED;
+			dynlist_name_t *dyn = tavl_find( ds->ds_names, &f->f_av_value, dynlist_avl_cmp );
 			if ( dyn && !dynlist_filter_group( op, dyn, n, ds ))
 				break;
 		}
@@ -1317,6 +1312,8 @@ dynlist_filter_dup( Operation *op, Filter *f, AttributeDescription *ad, dynlist_
 
 	case LDAP_FILTER_SUBSTRINGS:
 		n->f_choice = f->f_choice;
+		n->f_sub_initial = f->f_sub_initial;
+		n->f_sub_final = f->f_sub_final;
 		n->f_sub = f->f_sub;
 		break;
 
@@ -1383,9 +1380,9 @@ dynlist_search_free( void *ptr )
 		ldap_free_urldesc( ludp );
 	}
 	if ( dyn->dy_subs )
-		ldap_tavl_free( dyn->dy_subs, NULL );
+		tavl_free( dyn->dy_subs, NULL );
 	if ( dyn->dy_sups )
-		ldap_tavl_free( dyn->dy_sups, NULL );
+		tavl_free( dyn->dy_sups, NULL );
 	ch_free( ptr );
 }
 
@@ -1396,9 +1393,9 @@ dynlist_search_cleanup( Operation *op, SlapReply *rs )
 		rs->sr_err == SLAPD_ABANDON ) {
 		slap_callback *sc = op->o_callback;
 		dynlist_search_t *ds = op->o_callback->sc_private;
-		ldap_tavl_free( ds->ds_names, dynlist_search_free );
+		tavl_free( ds->ds_names, dynlist_search_free );
 		if ( ds->ds_fnodes )
-			ldap_tavl_free( ds->ds_fnodes, NULL );
+			tavl_free( ds->ds_fnodes, NULL );
 		if ( ds->ds_origfilter ) {
 			op->o_tmpfree( op->ors_filterstr.bv_val, op->o_tmpmemctx );
 			dynlist_filter_free( op, op->ors_filter );
@@ -1475,8 +1472,8 @@ dynlist_add_memberOf(Operation *op, SlapReply *rs, dynlist_search_t *ds)
 	Attribute *a;
 
 	/* See if there are any memberOf values to attach to this entry */
-	for ( ptr = ldap_tavl_end( ds->ds_names, TAVL_DIR_LEFT ); ptr;
-		ptr = ldap_tavl_next( ptr, TAVL_DIR_RIGHT )) {
+	for ( ptr = tavl_end( ds->ds_names, TAVL_DIR_LEFT ); ptr;
+		ptr = tavl_next( ptr, TAVL_DIR_RIGHT )) {
 		dynlist_map_t *dlm;
 		dyn = ptr->avl_data;
 		for ( dlm = dyn->dy_dli->dli_dlm; dlm; dlm = dlm->dlm_next ) {
@@ -1523,7 +1520,7 @@ dynlist_search2resp( Operation *op, SlapReply *rs )
 	if ( rs->sr_type == REP_SEARCH && rs->sr_entry != NULL ) {
 		rc = SLAP_CB_CONTINUE;
 		/* See if this is one of our dynamic entries */
-		dyn = ldap_tavl_find( ds->ds_names, &rs->sr_entry->e_nname, dynlist_avl_cmp );
+		dyn = tavl_find( ds->ds_names, &rs->sr_entry->e_nname, dynlist_avl_cmp );
 		if ( dyn ) {
 			dyn->dy_seen = 1;
 			rc = dynlist_prepare_entry( op, rs, dyn->dy_dli, dyn );
@@ -1539,14 +1536,11 @@ dynlist_search2resp( Operation *op, SlapReply *rs )
 		SlapReply r = *rs;
 		Filter *f = ds->ds_origfilter ? ds->ds_origfilter : op->ors_filter;
 
-		if ( get_pagedresults( op ) > SLAP_CONTROL_IGNORED )
-			return SLAP_CB_CONTINUE;
-
 		/* Check for any unexpanded dynamic group entries that weren't picked up
 		 * by the original search filter.
 		 */
-		for ( ptr = ldap_tavl_end( ds->ds_names, TAVL_DIR_LEFT ); ptr;
-			ptr = ldap_tavl_next( ptr, TAVL_DIR_RIGHT )) {
+		for ( ptr = tavl_end( ds->ds_names, TAVL_DIR_LEFT ); ptr;
+			ptr = tavl_next( ptr, TAVL_DIR_RIGHT )) {
 			dyn = ptr->avl_data;
 			if ( dyn->dy_seen )
 				continue;
@@ -1602,13 +1596,13 @@ dynlist_nestlink_dg( Operation *op, SlapReply *rs )
 	if ( rs->sr_type != REP_SEARCH )
 		return LDAP_SUCCESS;
 
-	dj = ldap_tavl_find( dll->dl_ds->ds_names, &rs->sr_entry->e_nname, dynlist_avl_cmp );
+	dj = tavl_find( dll->dl_ds->ds_names, &rs->sr_entry->e_nname, dynlist_avl_cmp );
 	if ( dj ) {
 		if ( ds->ds_want & WANT_MEMBEROF ) {
-			ldap_tavl_insert( &dj->dy_sups, di, dynlist_ptr_cmp, ldap_avl_dup_error );
+			tavl_insert( &dj->dy_sups, di, dynlist_ptr_cmp, avl_dup_error );
 		}
 		if ( ds->ds_want & WANT_MEMBER ) {
-			ldap_tavl_insert( &di->dy_subs, dj, dynlist_ptr_cmp, ldap_avl_dup_error );
+			tavl_insert( &di->dy_subs, dj, dynlist_ptr_cmp, avl_dup_error );
 		}
 	}
 	return LDAP_SUCCESS;
@@ -1625,8 +1619,8 @@ dynlist_nestlink( Operation *op, dynlist_search_t *ds )
 	Attribute *a;
 	int i;
 
-	for ( ptr = ldap_tavl_end( ds->ds_names, TAVL_DIR_LEFT ); ptr;
-		ptr = ldap_tavl_next( ptr, TAVL_DIR_RIGHT )) {
+	for ( ptr = tavl_end( ds->ds_names, TAVL_DIR_LEFT ); ptr;
+		ptr = tavl_next( ptr, TAVL_DIR_RIGHT )) {
 		di = ptr->avl_data;
 		if ( ds->ds_dlm ) {
 			if ( overlay_entry_get_ov( op, &di->dy_name, NULL, NULL, 0, &e, on ) != LDAP_SUCCESS || e == NULL )
@@ -1634,13 +1628,13 @@ dynlist_nestlink( Operation *op, dynlist_search_t *ds )
 			a = attr_find( e->e_attrs, ds->ds_dlm->dlm_member_ad );
 			if ( a ) {
 				for ( i=0; i < a->a_numvals; i++ ) {
-					dj = ldap_tavl_find( ds->ds_names, &a->a_nvals[i], dynlist_avl_cmp );
+					dj = tavl_find( ds->ds_names, &a->a_nvals[i], dynlist_avl_cmp );
 					if ( dj ) {
 						if ( ds->ds_want & WANT_MEMBEROF ) {
-							ldap_tavl_insert( &dj->dy_sups, di, dynlist_ptr_cmp, ldap_avl_dup_error );
+							tavl_insert( &dj->dy_sups, di, dynlist_ptr_cmp, avl_dup_error );
 						}
 						if ( ds->ds_want & WANT_MEMBER ) {
-							ldap_tavl_insert( &di->dy_subs, dj, dynlist_ptr_cmp, ldap_avl_dup_error );
+							tavl_insert( &di->dy_subs, dj, dynlist_ptr_cmp, avl_dup_error );
 						}
 					}
 				}
@@ -1685,7 +1679,6 @@ dynlist_search( Operation *op, SlapReply *rs )
 	sc->sc_private = (void *)(sc+1);
 	ds = sc->sc_private;
 
-	memset( o.o_ctrlflag, 0, sizeof( o.o_ctrlflag ));
 	o.o_managedsait = SLAP_CONTROL_CRITICAL;
 
 	/* Are we using memberOf, and does it affect this request? */
@@ -1708,19 +1701,16 @@ dynlist_search( Operation *op, SlapReply *rs )
 				if ( dlm->dlm_memberOf_ad ) {
 					int want = 0;
 
-					/* is attribute in filter? */
-					if ( ad_infilter( dlm->dlm_memberOf_ad, op->ors_filter )) {
-						want |= WANT_MEMBEROF;
-						/* with nesting, filter attributes also require nestlink */
-						if ( dlm->dlm_memberOf_nested ) {
+					/* with nesting, filter attributes also require nestlink */
+					if ( dlm->dlm_memberOf_nested ) {
 						/* WANT_ flags have inverted meaning here:
 						 * to satisfy (memberOf=) filter, we need to also
 						 * find all subordinate groups. No special
 						 * treatment is needed for (member=) since we
 						 * already search all group entries.
 						 */
+						if ( ad_infilter( dlm->dlm_memberOf_ad, op->ors_filter ))
 							want |= WANT_MEMBER;
-						}
 					}
 
 					/* if attribute is not requested, skip it */

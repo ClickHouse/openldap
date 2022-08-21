@@ -1,5 +1,5 @@
 # $OpenLDAP$
-# Copyright 2007-2022 The OpenLDAP Foundation, All Rights Reserved.
+# Copyright 2007-2020 The OpenLDAP Foundation, All Rights Reserved.
 # COPYING RESTRICTIONS APPLY, see COPYRIGHT.
 
 H1: Common errors encountered when using OpenLDAP Software
@@ -108,6 +108,10 @@ target entry does not support the given operation.
 
 The password backend is only willing to perform searches. It will return an 
 unwilling to perform error for all other operations.
+
+The shell backend is configurable and may support a limited subset of operations.
+Check for other errors indicating a shortage of resources required by the 
+directory server. i.e. you may have a full disk etc
 
 H3: ldap_*: Insufficient access
 

@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1999-2022 The OpenLDAP Foundation.
+ * Copyright 1999-2020 The OpenLDAP Foundation.
  * Portions Copyright 2001-2003 Pierangelo Masarati.
  * Portions Copyright 1999-2003 Howard Chu.
  * All rights reserved.
@@ -328,7 +328,7 @@ down:;
 	default:
 other:;
 		/* convert rc to the correct LDAP error and send it back to the client:
-		   assign the error to rs, so we can use it as argument to slap_map_api2result
+		   assing the error to rs, so we can use it as argument to slap_map_api2result
 		   and then assign the output back to rs->sr_err */
 		rs->sr_err = rc;
 		rs->sr_err = slap_map_api2result( rs );

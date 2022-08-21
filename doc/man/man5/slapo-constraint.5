@@ -1,6 +1,6 @@
 .TH SLAPO-CONSTRAINT 5 "RELEASEDATE" "OpenLDAP LDVERSION"
 .\" Copyright 2005-2006 Hewlett-Packard Company
-.\" Copyright 2006-2022 The OpenLDAP Foundation All Rights Reserved.
+.\" Copyright 2006-2020 The OpenLDAP Foundation All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
 .\" $OpenLDAP$
 .SH NAME
@@ -35,9 +35,8 @@ directive.
 .B constraint_attribute <attribute_name>[,...] <type> <value> [<extra> [...]]
 Specifies the constraint which should apply to the comma-separated
 attribute list named as the first parameter.
-Six types of constraint are currently supported -
+Five types of constraint are currently supported -
 .BR regex ,
-.BR negregex ,
 .BR size ,
 .BR count ,
 .BR uri ,
@@ -46,8 +45,6 @@ and
 
 The parameter following the
 .B regex
-or
-.B negregex
 type is a Unix style regular expression (See
 .BR regex (7)
 ). The parameter following the
@@ -107,7 +104,6 @@ overlay constraint
 constraint_attribute jpegPhoto size 131072
 constraint_attribute userPassword count 3
 constraint_attribute mail regex ^[[:alnum:]]+@mydomain.com$
-constraint_attribute mail negregex ^[[:alnum:]]+@notallowed.com$
 constraint_attribute title uri
   ldap:///dc=catalog,dc=example,dc=com?title?sub?(objectClass=titleCatalog)
 constraint_attribute cn,sn,givenName set
@@ -119,9 +115,7 @@ constraint_attribute cn,sn,givenName set
 A specification like the above would reject any
 .B mail
 attribute which did not look like
-.BR "<alphanumeric string>@mydomain.com"
-or that looks like
-.BR "<alphanumeric string>@notallowed.com" .
+.BR "<alpha-numeric string>@mydomain.com" .
 It would also reject any
 .B title
 attribute whose values were not listed in the

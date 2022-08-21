@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2004-2022 The OpenLDAP Foundation.
+ * Copyright 2004-2020 The OpenLDAP Foundation.
  * Portions Copyright 2004-2005 Howard Chu, Symas Corporation.
  * Portions Copyright 2004 Hewlett-Packard Company.
  * All rights reserved.
@@ -39,7 +39,7 @@
 #include <ac/time.h>
 #include <ac/string.h>
 #include <ac/ctype.h>
-#include "slap-config.h"
+#include "config.h"
 
 #ifndef MODULE_NAME_SZ
 #define MODULE_NAME_SZ 256
@@ -143,9 +143,7 @@ static struct schema_info {
 		"EQUALITY generalizedTimeMatch "
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
-		"SINGLE-VALUE "
-		"NO-USER-MODIFICATION "
-		"USAGE directoryOperation )",
+		"SINGLE-VALUE NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdChangedTime },
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.17 "
 		"NAME ( 'pwdAccountLockedTime' ) "
@@ -154,7 +152,8 @@ static struct schema_info {
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
 		"SINGLE-VALUE "
-#if 0 /* FIXME: ITS#9671 until we introduce a separate lockout flag? */
+#if 0
+		/* Not until Relax control is released */
 		"NO-USER-MODIFICATION "
 #endif
 		"USAGE directoryOperation )",
@@ -165,32 +164,28 @@ static struct schema_info {
 		"EQUALITY generalizedTimeMatch "
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
-		"NO-USER-MODIFICATION "
-		"USAGE directoryOperation )",
+		"NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdFailureTime },
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.20 "
 		"NAME ( 'pwdHistory' ) "
 		"DESC 'The history of users passwords' "
 		"EQUALITY octetStringMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 "
-		"NO-USER-MODIFICATION "
-		"USAGE directoryOperation )",
+		"NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdHistory },
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.21 "
 		"NAME ( 'pwdGraceUseTime' ) "
 		"DESC 'The timestamps of the grace login once the password has expired' "
 		"EQUALITY generalizedTimeMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
-		"NO-USER-MODIFICATION "
-		"USAGE directoryOperation )",
+		"NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdGraceUseTime }, 
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.22 "
 		"NAME ( 'pwdReset' ) "
 		"DESC 'The indication that the password has been reset' "
 		"EQUALITY booleanMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 "
-		"SINGLE-VALUE "
-		"USAGE directoryOperation )",
+		"SINGLE-VALUE USAGE directoryOperation )",
 		&ad_pwdReset },
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.23 "
 		"NAME ( 'pwdPolicySubentry' ) "
@@ -198,7 +193,8 @@ static struct schema_info {
 		"EQUALITY distinguishedNameMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.12 "
 		"SINGLE-VALUE "
-#if 0 /* ITS#9671: until we implement ITS#9343 or similar */
+#if 0
+		/* Not until Relax control is released */
 		"NO-USER-MODIFICATION "
 #endif
 		"USAGE directoryOperation )",
@@ -209,8 +205,7 @@ static struct schema_info {
 		"EQUALITY generalizedTimeMatch "
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
-		"SINGLE-VALUE "
-		"USAGE directoryOperation )",
+		"SINGLE-VALUE NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdStartTime },
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.28 "
 		"NAME ( 'pwdEndTime' ) "
@@ -218,8 +213,7 @@ static struct schema_info {
 		"EQUALITY generalizedTimeMatch "
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
-		"SINGLE-VALUE "
-		"USAGE directoryOperation )",
+		"SINGLE-VALUE NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdEndTime },
 	/* Defined in schema_prep.c now
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.29 "
@@ -228,9 +222,7 @@ static struct schema_info {
 		"EQUALITY generalizedTimeMatch "
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
-		"SINGLE-VALUE "
-		"NO-USER-MODIFICATION "
-		"USAGE directoryOperation )",
+		"SINGLE-VALUE NO-USER-MODIFICATION USAGE directoryOperation )",
 		&ad_pwdLastSuccess },
 	*/
 	{	"( 1.3.6.1.4.1.42.2.27.8.1.33 "
@@ -240,7 +232,10 @@ static struct schema_info {
 		"ORDERING generalizedTimeOrderingMatch "
 		"SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 "
 		"SINGLE-VALUE "
+#if 0
+		/* Not until Relax control is released */
 		"NO-USER-MODIFICATION "
+#endif
 		"USAGE directoryOperation )",
 		&ad_pwdAccountTmpLockoutEnd },
 
@@ -708,7 +703,7 @@ create_passcontrol( Operation *op, int exptime, int grace, LDAPPasswordPolicyErr
 		}
 		ber_printf( ber, "tO", PPOLICY_WARNING, &bv );
 		ch_free( bv.bv_val );
-	} else if ( grace >= 0 ) {
+	} else if ( grace > 0 ) {
 		ber_init2( b2, NULL, LBER_USE_DER );
 		ber_printf( b2, "ti", PPOLICY_GRACE, grace );
 		rc = ber_flatten2( b2, &bv, 1 );
@@ -868,11 +863,9 @@ ppolicy_get( Operation *op, Entry *e, PassPolicy *pp )
 {
 	slap_overinst *on = (slap_overinst *)op->o_bd->bd_info;
 	pp_info *pi = on->on_bi.bi_private;
-	BackendDB *bd, *bd_orig = op->o_bd;
-	AttributeDescription *ad = NULL;
 	Attribute *a;
 	BerVarray vals;
-	int rc = LDAP_SUCCESS;
+	int rc;
 	Entry *pe = NULL;
 #if 0
 	const char *text;
@@ -880,8 +873,7 @@ ppolicy_get( Operation *op, Entry *e, PassPolicy *pp )
 
 	ppolicy_get_default( pp );
 
-	ad = ad_pwdPolicySubentry;
-	if ( (a = attr_find( e->e_attrs, ad )) == NULL ) {
+	if ((a = attr_find( e->e_attrs, ad_pwdPolicySubentry )) == NULL) {
 		/*
 		 * entry has no password policy assigned - use default
 		 */
@@ -897,14 +889,9 @@ ppolicy_get( Operation *op, Entry *e, PassPolicy *pp )
 		}
 	}
 
-	op->o_bd = bd = select_backend( vals, 0 );
-	if ( op->o_bd == NULL ) {
-		op->o_bd = bd_orig;
-		goto defaultpol;
-	}
-
+	op->o_bd->bd_info = (BackendInfo *)on->on_info;
 	rc = be_entry_get_rw( op, vals, NULL, NULL, 0, &pe );
-	op->o_bd = bd_orig;
+	op->o_bd->bd_info = (BackendInfo *)on;
 
 	if ( rc ) goto defaultpol;
 
@@ -913,177 +900,133 @@ ppolicy_get( Operation *op, Entry *e, PassPolicy *pp )
 		slap_bv2ad( &a->a_vals[0], &pp->ad, &text );
 #endif
 
-	ad = ad_pwdMinAge;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMinAge ) )
 			&& lutil_atoi( &pp->pwdMinAge, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMaxAge;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMaxAge ) )
 			&& lutil_atoi( &pp->pwdMaxAge, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMaxIdle;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMaxIdle ) )
 			&& lutil_atoi( &pp->pwdMaxIdle, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdInHistory;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdInHistory ) )
 			&& lutil_atoi( &pp->pwdInHistory, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdCheckQuality;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdCheckQuality ) )
 			&& lutil_atoi( &pp->pwdCheckQuality, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMinLength;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMinLength ) )
 			&& lutil_atoi( &pp->pwdMinLength, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMaxLength;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMaxLength ) )
 			&& lutil_atoi( &pp->pwdMaxLength, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMaxFailure;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMaxFailure ) )
 			&& lutil_atoi( &pp->pwdMaxFailure, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMaxRecordedFailure;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMaxRecordedFailure ) )
 			&& lutil_atoi( &pp->pwdMaxRecordedFailure, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdGraceExpiry;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdGraceExpiry ) )
 			&& lutil_atoi( &pp->pwdGraceExpiry, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdGraceAuthNLimit;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdGraceAuthNLimit ) )
 			&& lutil_atoi( &pp->pwdGraceAuthNLimit, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdExpireWarning;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdExpireWarning ) )
 			&& lutil_atoi( &pp->pwdExpireWarning, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdFailureCountInterval;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdFailureCountInterval ) )
 			&& lutil_atoi( &pp->pwdFailureCountInterval, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdLockoutDuration;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdLockoutDuration ) )
 			&& lutil_atoi( &pp->pwdLockoutDuration, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMinDelay;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMinDelay ) )
 			&& lutil_atoi( &pp->pwdMinDelay, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
-
-	ad = ad_pwdMaxDelay;
-	if ( (a = attr_find( pe->e_attrs, ad ))
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdMaxDelay ) )
 			&& lutil_atoi( &pp->pwdMaxDelay, a->a_vals[0].bv_val ) != 0 ) {
 		rc = LDAP_CONSTRAINT_VIOLATION;
 		goto defaultpol;
 	}
 
-	ad = ad_pwdCheckModule;
-	if ( (a = attr_find( pe->e_attrs, ad )) ) {
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdCheckModule ) ) ) {
 		strncpy( pp->pwdCheckModule, a->a_vals[0].bv_val,
 			sizeof(pp->pwdCheckModule) );
 		pp->pwdCheckModule[sizeof(pp->pwdCheckModule)-1] = '\0';
 	}
-
-	ad = ad_pwdCheckModuleArg;
-	if ( (a = attr_find( pe->e_attrs, ad )) ) {
+	if ( ( a = attr_find( pe->e_attrs, ad_pwdCheckModuleArg ) ) ) {
 		ber_dupbv_x( &pp->pwdCheckModuleArg, &a->a_vals[0], op->o_tmpmemctx );
 	}
 
-	ad = ad_pwdLockout;
-	if ( (a = attr_find( pe->e_attrs, ad )) )
+	if ((a = attr_find( pe->e_attrs, ad_pwdLockout )))
 		pp->pwdLockout = bvmatch( &a->a_nvals[0], &slap_true_bv );
-
-	ad = ad_pwdMustChange;
-	if ( (a = attr_find( pe->e_attrs, ad )) )
+	if ((a = attr_find( pe->e_attrs, ad_pwdMustChange )))
 		pp->pwdMustChange = bvmatch( &a->a_nvals[0], &slap_true_bv );
-
-	ad = ad_pwdAllowUserChange;
-	if ( (a = attr_find( pe->e_attrs, ad )) )
+	if ((a = attr_find( pe->e_attrs, ad_pwdAllowUserChange )))
 		pp->pwdAllowUserChange = bvmatch( &a->a_nvals[0], &slap_true_bv );
-
-	ad = ad_pwdSafeModify;
-	if ( (a = attr_find( pe->e_attrs, ad )) )
+	if ((a = attr_find( pe->e_attrs, ad_pwdSafeModify )))
 		pp->pwdSafeModify = bvmatch( &a->a_nvals[0], &slap_true_bv );
 
 	if ( pp->pwdMaxRecordedFailure < pp->pwdMaxFailure )
 		pp->pwdMaxRecordedFailure = pp->pwdMaxFailure;
-
 	if ( !pp->pwdMaxRecordedFailure && pp->pwdMinDelay )
 		pp->pwdMaxRecordedFailure = PPOLICY_DEFAULT_MAXRECORDED_FAILURE;
 
 	if ( pp->pwdMinDelay && !pp->pwdMaxDelay ) {
-		Debug( LDAP_DEBUG_ANY, "ppolicy_get: "
-				"pwdMinDelay was set but pwdMaxDelay wasn't, assuming they "
-				"are equal\n" );
+		Debug( LDAP_DEBUG_ANY, "ppolicy_get: pwdMinDelay was set but pwdMaxDelay wasn't, "
+				"assuming they are equal\n" );
 		pp->pwdMaxDelay = pp->pwdMinDelay;
 	}
 
-	op->o_bd = bd;
+	op->o_bd->bd_info = (BackendInfo *)on->on_info;
 	be_entry_release_r( op, pe );
-	op->o_bd = bd_orig;
+	op->o_bd->bd_info = (BackendInfo *)on;
 
 	return LDAP_SUCCESS;
 
 defaultpol:
 	if ( pe ) {
-		op->o_bd = bd;
+		op->o_bd->bd_info = (BackendInfo *)on->on_info;
 		be_entry_release_r( op, pe );
-		op->o_bd = bd_orig;
+		op->o_bd->bd_info = (BackendInfo *)on;
 	}
 
 	if ( rc && !BER_BVISNULL( vals ) ) {
-		Debug( LDAP_DEBUG_ANY, "ppolicy_get: "
-			"policy subentry %s missing or invalid at '%s', "
-			"no policy will be applied!\n",
-			vals->bv_val, ad ? ad->ad_cname.bv_val : "" );
+		Debug( LDAP_DEBUG_ANY,
+			"ppolicy_get: policy subentry %s missing or invalid\n",
+			vals->bv_val );
 	} else {
 		Debug( LDAP_DEBUG_TRACE,
 			"ppolicy_get: using default policy\n" );
@@ -1502,7 +1445,7 @@ ppolicy_bind_response( Operation *op, SlapReply *rs )
 	strcpy(nowstr_usec, nowstr);
 	timestamp_usec.bv_val = nowstr_usec;
 	timestamp_usec.bv_len = timestamp.bv_len;
-	snprintf( timestamp_usec.bv_val + timestamp_usec.bv_len-1, sizeof(".123456Z"), ".%06dZ", now_usec.tt_nsec / 1000 );
+	snprintf( timestamp_usec.bv_val + timestamp_usec.bv_len-1, sizeof(".123456Z"), ".%06dZ", now_usec.tt_usec );
 	timestamp_usec.bv_len += STRLENOF(".123456");
 
 	if ( rs->sr_err == LDAP_INVALID_CREDENTIALS && ppb->pp.pwdMaxRecordedFailure ) {
@@ -1715,10 +1658,8 @@ grace:
 		Debug( LDAP_DEBUG_ANY,
 			"ppolicy_bind: Entry %s has an expired password: %d grace logins\n",
 			e->e_name.bv_val, ngut );
-
-		ngut--;
-
-		if (ngut < 0) {
+		
+		if (ngut < 1) {
 			ppb->pErr = PP_passwordExpired;
 			rs->sr_err = LDAP_INVALID_CREDENTIALS;
 			goto done;
@@ -1735,8 +1676,8 @@ grace:
 		m->sml_numvals = 1;
 		m->sml_values = ch_calloc( sizeof(struct berval), 2 );
 		m->sml_nvalues = ch_calloc( sizeof(struct berval), 2 );
-		ber_dupbv( &m->sml_values[0], &timestamp_usec );
-		ber_dupbv( &m->sml_nvalues[0], &timestamp_usec );
+		ber_dupbv( &m->sml_values[0], &timestamp );
+		ber_dupbv( &m->sml_nvalues[0], &timestamp );
 		m->sml_next = mod;
 		mod = m;
 
@@ -1749,13 +1690,8 @@ check_expiring_password:
 		 * If the password has expired, and we're in the grace period, then
 		 * we don't need to do this bit. Similarly, if we don't have password
 		 * aging, then there's no need to do this bit either.
-		 *
-		 * If pwdtime is -1 there is no password Change Time attribute on the
-		 * entry so we skip the expiry check.
-		 *
 		 */
-		if ((ppb->pp.pwdMaxAge < 1) || (pwExpired) || (ppb->pp.pwdExpireWarning < 1) ||
-			(pwtime == -1))
+		if ((ppb->pp.pwdMaxAge < 1) || (pwExpired) || (ppb->pp.pwdExpireWarning < 1))
 			goto done;
 
 		age = (int)(now - pwtime);
@@ -1774,7 +1710,7 @@ check_expiring_password:
 			warn = ppb->pp.pwdMaxAge - age; /* seconds left until expiry */
 			if (warn < 0) warn = 0; /* something weird here - why is pwExpired not set? */
 			
-			Debug( LDAP_DEBUG_TRACE,
+			Debug( LDAP_DEBUG_ANY,
 				"ppolicy_bind: Setting warning for password expiry for %s = %d seconds\n",
 				op->o_req_dn.bv_val, warn );
 		}
@@ -1824,11 +1760,6 @@ locked:
 			op2.o_bd->bd_info = (BackendInfo *)on->on_info;
 		}
 		rc = op2.o_bd->be_modify( &op2, &r2 );
-		if ( rc != LDAP_SUCCESS ) {
-			Debug( LDAP_DEBUG_ANY, "%s ppolicy_bind_response: "
-					"ppolicy state change failed with rc=%d text=%s\n",
-					op->o_log_prefix, rc, r2.sr_text );
-		}
 	}
 	if ( mod ) {
 		slap_mods_free( mod, 1 );
@@ -2067,6 +1998,7 @@ ppolicy_account_usability_entry_cb( Operation *op, SlapReply *rs )
 				lockoutEnd = then + pp.pwdLockoutDuration;
 		}
 
+		a = attr_find( e->e_attrs, ad_pwdAccountLockedTime );
 		if ( (a = attr_find( e->e_attrs, ad_pwdAccountTmpLockoutEnd )) != NULL ) {
 			then = parse_time( a->a_vals[0].bv_val );
 			if ( lockoutEnd != -1 && then > lockoutEnd )
@@ -2215,7 +2147,6 @@ ppolicy_add(
 	PassPolicy pp;
 	Attribute *pa;
 	const char *txt;
-	int is_pwdadmin = 0;
 
 	if ( ppolicy_restrict( op, rs ) != SLAP_CB_CONTINUE )
 		return rs->sr_err;
@@ -2224,14 +2155,10 @@ ppolicy_add(
 	if ( SLAPD_SYNC_IS_SYNCCONN( op->o_connid ) )
 		return SLAP_CB_CONTINUE;
 
-	ppolicy_get( op, op->ora_e, &pp );
-
-	if ( access_allowed( op, op->ora_e, pp.ad, NULL, ACL_MANAGE, NULL ) ) {
-		is_pwdadmin = 1;
-	}
-
 	/* Check for password in entry */
-	if ( (pa = attr_find( op->oq_add.rs_e->e_attrs, pp.ad )) ) {
+	if ((pa = attr_find( op->oq_add.rs_e->e_attrs,
+		slap_schema.si_ad_userPassword )))
+	{
 		assert( pa->a_vals != NULL );
 		assert( !BER_BVISNULL( &pa->a_vals[ 0 ] ) );
 
@@ -2240,13 +2167,17 @@ ppolicy_add(
 			return rs->sr_err;
 		}
 
+		if ( ppolicy_get( op, op->ora_e, &pp ) != LDAP_SUCCESS ) {
+			return SLAP_CB_CONTINUE;
+		}
+
 		/*
-		 * new entry contains a password - if we're not the password admin
+		 * new entry contains a password - if we're not the root user
 		 * then we need to check that the password fits in with the
 		 * security policy for the new entry.
 		 */
 
-		if ( pp.pwdCheckQuality > 0 && !is_pwdadmin ) {
+		if (pp.pwdCheckQuality > 0 && !be_isroot( op )) {
 			struct berval *bv = &(pa->a_vals[0]);
 			int rc, send_ctrl = 0;
 			LDAPPasswordPolicyError pErr = PP_noError;
@@ -2308,8 +2239,7 @@ ppolicy_add(
 		}
 
 		/* If password aging is in effect, set the pwdChangedTime */
-		if ( ( pp.pwdMaxAge || pp.pwdMinAge ) &&
-				!attr_find( op->ora_e->e_attrs, ad_pwdChangedTime ) ) {
+		if ( pp.pwdMaxAge || pp.pwdMinAge ) {
 			struct berval timestamp;
 			char timebuf[ LDAP_LUTIL_GENTIME_BUFSIZE ];
 			time_t now = slap_get_time();
@@ -2338,26 +2268,11 @@ ppolicy_mod_cb( Operation *op, SlapReply *rs )
 }
 
 static int
-ppolicy_text_cleanup( Operation *op, SlapReply *rs )
-{
-	slap_callback *sc = op->o_callback;
-
-	if ( rs->sr_text == sc->sc_private ) {
-		rs->sr_text = NULL;
-	}
-	free( sc->sc_private );
-
-	op->o_callback = sc->sc_next;
-	op->o_tmpfree( sc, op->o_tmpmemctx );
-	return SLAP_CB_CONTINUE;
-}
-
-static int
 ppolicy_modify( Operation *op, SlapReply *rs )
 {
 	slap_overinst		*on = (slap_overinst *)op->o_bd->bd_info;
 	pp_info			*pi = on->on_bi.bi_private;
-	int			i, rc, mod_pw_only, pwmod = 0, pwmop = -1, deladd,
+	int			i, rc, mod_pw_only, pwmod, pwmop = -1, deladd,
 				hsize = 0, hskip;
 	PassPolicy		pp;
 	Modifications		*mods = NULL, *modtail = NULL,
@@ -2376,7 +2291,6 @@ ppolicy_modify( Operation *op, SlapReply *rs )
 	int got_del_grace = 0, got_del_lock = 0, got_pw = 0, got_del_fail = 0,
 		got_del_success = 0;
 	int got_changed = 0, got_history = 0;
-	int have_policy = 0;
 
 	op->o_bd->bd_info = (BackendInfo *)on->on_info;
 	rc = be_entry_get_rw( op, &op->o_req_ndn, NULL, NULL, 0, &e );
@@ -2529,9 +2443,8 @@ ppolicy_modify( Operation *op, SlapReply *rs )
 		}
 	}
 
-	/* ppolicy_hash_cleartext depends on pwmod being determined first */
-	if ( ppolicy_get( op, e, &pp ) == LDAP_SUCCESS ) {
-		have_policy = 1;
+	if ( ppolicy_get( op, e, &pp ) != LDAP_SUCCESS ) {
+		goto do_modify;
 	}
 
 	if ( access_allowed( op, e, pp.ad, NULL, ACL_MANAGE, NULL ) ) {
@@ -2647,7 +2560,7 @@ ppolicy_modify( Operation *op, SlapReply *rs )
 	 * the root user is bound. Root can do anything, including avoid the policies.
 	 */
 
-	if (!have_policy || !pwmod) goto do_modify;
+	if (!pwmod) goto do_modify;
 
 	/*
 	 * Build the password history list in ascending time order
@@ -3109,21 +3022,8 @@ return_results:
 	}
 	send_ldap_result( op, rs );
 	if ( free_txt ) {
-		if ( is_pwdexop ) {
-			slap_callback *cb;
-			cb = op->o_tmpcalloc( sizeof(ppbind)+sizeof(slap_callback),
-				1, op->o_tmpmemctx );
-
-			/* Setup a callback so we can free the text when sent */
-			cb->sc_cleanup = ppolicy_text_cleanup;
-			cb->sc_private = (void *)txt;
-			overlay_callback_after_backover( op, cb, 1 );
-		} else {
-			if ( rs->sr_text == txt ) {
-				rs->sr_text = NULL;
-			}
-			free( (char *)txt );
-		}
+		free( (char *)txt );
+		rs->sr_text = NULL;
 	}
 	if ( send_ctrl ) {
 		if ( is_pwdexop ) {

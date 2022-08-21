@@ -1,7 +1,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2003-2022 The OpenLDAP Foundation.
+ * Copyright 2003-2020 The OpenLDAP Foundation.
  * Portions Copyright 2003 IBM Corporation.
  * Portions Copyright 2003-2009 Symas Corporation.
  * All rights reserved.
@@ -31,11 +31,11 @@
 #include "slap.h"
 #include "lutil.h"
 #include "ldap_rq.h"
-#include "ldap_avl.h"
+#include "avl.h"
 
 #include "../back-monitor/back-monitor.h"
 
-#include "slap-config.h"
+#include "config.h"
 
 /*
  * Control that allows to access the private DB
@@ -85,7 +85,6 @@ typedef struct cached_query_s {
 	int						bind_refcnt;	/* number of bind operation referencing this query */
 	unsigned long			answerable_cnt; /* how many times it was answerable */
 	int						refcnt;	/* references since last refresh */
-	int						in_lru;	/* query is in LRU list */
 	ldap_pvt_thread_mutex_t		answerable_cnt_mutex;
 	struct cached_query_s  		*next;  	/* next query in the template */
 	struct cached_query_s  		*prev;  	/* previous query in the template */
@@ -1043,7 +1042,6 @@ add_query_on_top (query_manager* qm, CachedQuery* qc)
 {
 	CachedQuery* top = qm->lru_top;
 
-	qc->in_lru = 1;
 	qm->lru_top = qc;
 
 	if (top)
@@ -1065,10 +1063,9 @@ remove_query (query_manager* qm, CachedQuery* qc)
 	CachedQuery* up;
 	CachedQuery* down;
 
-	if (!qc || !qc->in_lru)
+	if (!qc)
 		return;
 
-	qc->in_lru = 0;
 	up = qc->lru_up;
 	down = qc->lru_down;
 
@@ -1293,10 +1290,10 @@ find_filter( Operation *op, TAvlnode *root, Filter *inputf, Filter *first )
 	 * walk the entire list.
 	 */
 	if ( first->f_choice == LDAP_FILTER_SUBSTRINGS ) {
-		ptr = ldap_tavl_end( root, 1 );
+		ptr = tavl_end( root, 1 );
 		dir = TAVL_DIR_LEFT;
 	} else {
-		ptr = ldap_tavl_find3( root, &cq, pcache_query_cmp, &ret );
+		ptr = tavl_find3( root, &cq, pcache_query_cmp, &ret );
 		dir = (first->f_choice == LDAP_FILTER_GE) ? TAVL_DIR_LEFT :
 			TAVL_DIR_RIGHT;
 	}
@@ -1320,7 +1317,7 @@ find_filter( Operation *op, TAvlnode *root, Filter *inputf, Filter *first )
 			if ( eqpass == 0 ) {
 				if ( qc->first->f_choice != LDAP_FILTER_EQUALITY ) {
 nextpass:			eqpass = 1;
-					ptr = ldap_tavl_end( root, 1 );
+					ptr = tavl_end( root, 1 );
 					dir = TAVL_DIR_LEFT;
 					continue;
 				}
@@ -1429,7 +1426,7 @@ nextpass:			eqpass = 1;
 
 		if ( res )
 			return qc;
-		ptr = ldap_tavl_next( ptr, dir );
+		ptr = tavl_next( ptr, dir );
 	}
 	return NULL;
 }
@@ -1459,7 +1456,7 @@ query_containment(Operation *op, query_manager *qm,
 		ldap_pvt_thread_rdwr_rlock(&templa->t_rwlock);
 		for( ;; ) {
 			/* Find the base */
-			qbptr = ldap_avl_find( templa->qbase, &qbase, pcache_dn_cmp );
+			qbptr = avl_find( templa->qbase, &qbase, pcache_dn_cmp );
 			if ( qbptr ) {
 				tscope = query->scope;
 				/* Find a matching scope:
@@ -1619,20 +1616,20 @@ add_query(
 	Debug( pcache_debug, "Lock AQ index = %p\n",
 			(void *) templ );
 	ldap_pvt_thread_rdwr_wlock(&templ->t_rwlock);
-	qbase = ldap_avl_find( templ->qbase, &qb, pcache_dn_cmp );
+	qbase = avl_find( templ->qbase, &qb, pcache_dn_cmp );
 	if ( !qbase ) {
 		qbase = ch_calloc( 1, sizeof(Qbase) + qb.base.bv_len + 1 );
 		qbase->base.bv_len = qb.base.bv_len;
 		qbase->base.bv_val = (char *)(qbase+1);
 		memcpy( qbase->base.bv_val, qb.base.bv_val, qb.base.bv_len );
 		qbase->base.bv_val[qbase->base.bv_len] = '\0';
-		ldap_avl_insert( &templ->qbase, qbase, pcache_dn_cmp, ldap_avl_dup_error );
+		avl_insert( &templ->qbase, qbase, pcache_dn_cmp, avl_dup_error );
 	}
 	new_cached_query->next = templ->query;
 	new_cached_query->prev = NULL;
 	new_cached_query->qbase = qbase;
-	rc = ldap_tavl_insert( &qbase->scopes[query->scope], new_cached_query,
-		pcache_query_cmp, ldap_avl_dup_error );
+	rc = tavl_insert( &qbase->scopes[query->scope], new_cached_query,
+		pcache_query_cmp, avl_dup_error );
 	if ( rc == 0 ) {
 		qbase->queries++;
 		if (templ->query == NULL)
@@ -1683,10 +1680,10 @@ remove_from_template (CachedQuery* qc, QueryTemplate* template)
 		qc->next->prev = qc->prev;
 		qc->prev->next = qc->next;
 	}
-	ldap_tavl_delete( &qc->qbase->scopes[qc->scope], qc, pcache_query_cmp );
+	tavl_delete( &qc->qbase->scopes[qc->scope], qc, pcache_query_cmp );
 	qc->qbase->queries--;
 	if ( qc->qbase->queries == 0 ) {
-		ldap_avl_delete( &template->qbase, qc->qbase, pcache_dn_cmp );
+		avl_delete( &template->qbase, qc->qbase, pcache_dn_cmp );
 		ch_free( qc->qbase );
 		qc->qbase = NULL;
 	}
@@ -3514,7 +3511,6 @@ consistency_check(
 	Operation *op;
 
 	CachedQuery *query, *qprev;
-	CachedQuery *expires = NULL;
 	int return_val, pause = PCACHE_CC_PAUSED;
 	QueryTemplate *templ;
 
@@ -3548,9 +3544,6 @@ consistency_check(
 			ttl += op->o_time;
 		}
 
-		Debug( pcache_debug, "Lock CR index = %p\n",
-				(void *) templ );
-		ldap_pvt_thread_rdwr_wlock(&templ->t_rwlock);
 		for ( query=templ->query_last; query; query=qprev ) {
 			qprev = query->prev;
 			if ( query->refresh_time && query->refresh_time < op->o_time ) {
@@ -3562,29 +3555,56 @@ consistency_check(
 				if ( query->refcnt )
 					query->expiry_time = op->o_time + templ->ttl;
 				if ( query->expiry_time > op->o_time ) {
-					/* perform actual refresh below */
+					refresh_query( op, query, on );
 					continue;
 				}
 			}
 
 			if (query->expiry_time < op->o_time) {
 				int rem = 0;
-				if ( query != templ->query_last )
+				Debug( pcache_debug, "Lock CR index = %p\n",
+						(void *) templ );
+				ldap_pvt_thread_rdwr_wlock(&templ->t_rwlock);
+				if ( query == templ->query_last ) {
+					rem = 1;
+					remove_from_template(query, templ);
+					Debug( pcache_debug, "TEMPLATE %p QUERIES-- %d\n",
+							(void *) templ, templ->no_of_queries );
+					Debug( pcache_debug, "Unlock CR index = %p\n",
+							(void *) templ );
+				}
+				if ( !rem ) {
+					ldap_pvt_thread_rdwr_wunlock(&templ->t_rwlock);
 					continue;
+				}
 				ldap_pvt_thread_mutex_lock(&qm->lru_mutex);
-				if (query->in_lru) {
-					remove_query(qm, query);
+				remove_query(qm, query);
+				ldap_pvt_thread_mutex_unlock(&qm->lru_mutex);
+				if ( BER_BVISNULL( &query->q_uuid ))
+					return_val = 0;
+				else
+					return_val = remove_query_data(op, &query->q_uuid);
+				Debug( pcache_debug, "STALE QUERY REMOVED, SIZE=%d\n",
+							return_val );
+				ldap_pvt_thread_mutex_lock(&cm->cache_mutex);
+				cm->cur_entries -= return_val;
+				cm->num_cached_queries--;
+				Debug( pcache_debug, "STORED QUERIES = %lu\n",
+						cm->num_cached_queries );
+				ldap_pvt_thread_mutex_unlock(&cm->cache_mutex);
+				Debug( pcache_debug,
+					"STALE QUERY REMOVED, CACHE ="
+					"%d entries\n",
+					cm->cur_entries );
+				ldap_pvt_thread_rdwr_wlock( &query->rwlock );
+				if ( query->bind_refcnt-- ) {
+					rem = 0;
+				} else {
 					rem = 1;
 				}
-				ldap_pvt_thread_mutex_unlock(&qm->lru_mutex);
-				if (!rem)
-					continue;
-				remove_from_template(query, templ);
-				Debug( pcache_debug, "TEMPLATE %p QUERIES-- %d\n",
-						(void *) templ, templ->no_of_queries );
-				query->prev = expires;
-				expires = query;
-				query->qtemp = NULL;
+				ldap_pvt_thread_rdwr_wunlock( &query->rwlock );
+				if ( rem ) free_query(query);
+				ldap_pvt_thread_rdwr_wunlock(&templ->t_rwlock);
 			} else if ( !templ->ttr && query->expiry_time > ttl ) {
 				/* We don't need to check for refreshes, and this
 				 * query's expiry is too new, and all subsequent queries
@@ -3595,57 +3615,6 @@ consistency_check(
 				 */
 				break;
 			}
-		}
-		Debug( pcache_debug, "Unlock CR index = %p\n",
-				(void *) templ );
-		ldap_pvt_thread_rdwr_wunlock(&templ->t_rwlock);
-		for ( query=expires; query; query=qprev ) {
-			int rem;
-			qprev = query->prev;
-			if ( BER_BVISNULL( &query->q_uuid ))
-				return_val = 0;
-			else
-				return_val = remove_query_data(op, &query->q_uuid);
-			Debug( pcache_debug, "STALE QUERY REMOVED, SIZE=%d\n",
-						return_val );
-			ldap_pvt_thread_mutex_lock(&cm->cache_mutex);
-			cm->cur_entries -= return_val;
-			cm->num_cached_queries--;
-			Debug( pcache_debug, "STORED QUERIES = %lu\n",
-					cm->num_cached_queries );
-			ldap_pvt_thread_mutex_unlock(&cm->cache_mutex);
-			Debug( pcache_debug,
-				"STALE QUERY REMOVED, CACHE ="
-				"%d entries\n",
-				cm->cur_entries );
-			ldap_pvt_thread_rdwr_wlock( &query->rwlock );
-			if ( query->bind_refcnt-- ) {
-				rem = 0;
-			} else {
-				rem = 1;
-			}
-			ldap_pvt_thread_rdwr_wunlock( &query->rwlock );
-			if ( rem ) free_query(query);
-		}
-
-		/* handle refreshes that we skipped earlier */
-		if ( templ->ttr ) {
-			ldap_pvt_thread_rdwr_rlock(&templ->t_rwlock);
-			for ( query=templ->query_last; query; query=qprev ) {
-				qprev = query->prev;
-				if ( query->refresh_time && query->refresh_time < op->o_time ) {
-					/* A refresh will extend the expiry if the query has been
-					 * referenced, but not if it's unreferenced. If the
-					 * expiration has been hit, then skip the refresh since
-					 * we're just going to discard the result anyway.
-					 */
-					if ( query->expiry_time > op->o_time ) {
-						refresh_query( op, query, on );
-						query->refresh_time = op->o_time + templ->ttr;
-					}
-				}
-			}
-			ldap_pvt_thread_rdwr_runlock(&templ->t_rwlock);
 		}
 	}
 
@@ -4809,7 +4778,7 @@ pcache_free_qbase( void *v )
 	int i;
 
 	for (i=0; i<3; i++)
-		ldap_tavl_free( qb->scopes[i], NULL );
+		tavl_free( qb->scopes[i], NULL );
 	ch_free( qb );
 }
 
@@ -4941,7 +4910,7 @@ pcache_db_destroy(
 			qn = qc->next;
 			free_query( qc );
 		}
-		ldap_avl_free( tm->qbase, pcache_free_qbase );
+		avl_free( tm->qbase, pcache_free_qbase );
 		free( tm->querystr.bv_val );
 		free( tm->bindfattrs );
 		free( tm->bindftemp.bv_val );
@@ -5660,16 +5629,15 @@ pcache_monitor_db_close( BackendDB *be )
 	slap_overinst *on = (slap_overinst *)be->bd_info;
 	cache_manager *cm = on->on_bi.bi_private;
 
-	if ( !BER_BVISNULL( &cm->monitor_ndn )) {
+	if ( cm->monitor_cb != NULL ) {
 		BackendInfo		*mi = backend_info( "monitor" );
 		monitor_extra_t		*mbe;
 
 		if ( mi && mi->bi_extra ) {
-			struct berval dummy = BER_BVNULL;
 			mbe = mi->bi_extra;
 			mbe->unregister_entry_callback( &cm->monitor_ndn,
 				(monitor_callback_t *)cm->monitor_cb,
-				&dummy, 0, &dummy );
+				NULL, 0, NULL );
 		}
 	}
 

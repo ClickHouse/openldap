@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * Portions Copyright 2010 Kurt D. Zeilenga.
  * All rights reserved.
  *
@@ -93,6 +93,7 @@ handle_private_option( int i )
 {
 	switch ( i ) {
 		char	*control, *cvalue;
+		int		crit;
 	case 'E': /* vc extension */
 		if( protocol == LDAP_VERSION2 ) {
 			fprintf( stderr, _("%s: -E incompatible with LDAPv%d\n"),
@@ -104,8 +105,10 @@ handle_private_option( int i )
 		 *	[!]key[=value] parameters, e.g.  -E !foo,bar=567
 		 */
 
+		crit = 0;
 		cvalue = NULL;
 		if( optarg[0] == '!' ) {
+			crit = 1;
 			optarg++;
 		}
 

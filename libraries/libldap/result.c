@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 1998-2022 The OpenLDAP Foundation.
+ * Copyright 1998-2020 The OpenLDAP Foundation.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -344,17 +344,13 @@ wait4msg(
 				int serviced = 0;
 				rc = LDAP_MSG_X_KEEP_LOOKING;
 				LDAP_MUTEX_LOCK( &ld->ld_req_mutex );
-				if ( ld->ld_requests != NULL ) {
-					TAvlnode *node = ldap_tavl_end( ld->ld_requests, TAVL_DIR_RIGHT );
-					LDAPRequest *lr;
-
-					assert( node != NULL );
-					lr = node->avl_data;
-					if ( lr->lr_status == LDAP_REQST_WRITING &&
-							ldap_is_write_ready( ld, lr->lr_conn->lconn_sb ) ) {
-						serviced = 1;
-						ldap_int_flush_request( ld, lr );
-					}
+				if ( ld->ld_requests &&
+					ld->ld_requests->lr_status == LDAP_REQST_WRITING &&
+					ldap_is_write_ready( ld,
+						ld->ld_requests->lr_conn->lconn_sb ) )
+				{
+					serviced = 1;
+					ldap_int_flush_request( ld, ld->ld_requests );
 				}
 				for ( lc = ld->ld_conns;
 					rc == LDAP_MSG_X_KEEP_LOOKING && lc != NULL;
@@ -456,7 +452,7 @@ try_read1msg(
 	LDAPRequest	*lr, *tmplr, dummy_lr = { 0 };
 	BerElement	tmpber;
 	int		rc, refer_cnt, hadref, simple_request, err;
-	ber_int_t	lderr = -1;
+	ber_int_t	lderr;
 
 #ifdef LDAP_CONNECTIONLESS
 	LDAPMessage	*tmp = NULL, *chain_head = NULL;
@@ -506,16 +502,6 @@ nextresp3:
 		lc->lconn_ber = NULL;
 		break;
 
-	default:
-		/*
-		 * We read a BerElement that isn't LDAP or the stream has desync'd.
-		 * In either case, anything we read from now on is probably garbage,
-		 * just drop the connection.
-		 */
-		ber_free( ber, 1 );
-		lc->lconn_ber = NULL;
-		/* FALLTHRU */
-
 	case LBER_DEFAULT:
 fail:
 		err = sock_errno();
@@ -530,6 +516,10 @@ fail:
 			--lc->lconn_refcnt;
 		}
 		lc->lconn_status = 0;
+		return -1;
+
+	default:
+		ld->ld_errno = LDAP_LOCAL_ERROR;
 		return -1;
 	}
 

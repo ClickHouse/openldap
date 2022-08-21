@@ -2,7 +2,7 @@
 /* $OpenLDAP$ */
 /* This work is part of OpenLDAP Software <http://www.openldap.org/>.
  *
- * Copyright 2003-2022 The OpenLDAP Foundation.
+ * Copyright 2003-2020 The OpenLDAP Foundation.
  * Copyright 2003 by Howard Chu.
  * All rights reserved.
  *
@@ -30,7 +30,7 @@
 
 #include "lutil.h"
 #include "slap.h"
-#include "slap-config.h"
+#include "config.h"
 
 /* This overlay extends the Compare operation to detect members of a
  * dynamic group. It has no effect on any other operations. It must
@@ -90,7 +90,7 @@ static int dgroup_cf( ConfigArgs *c )
 	case SLAP_CONFIG_ADD:
 	case LDAP_MOD_ADD:
 		{
-		adpair ap = { NULL, NULL, NULL }, **app, *a2;
+		adpair ap = { NULL, NULL, NULL }, *a2;
 		const char *text;
 		if ( slap_str2ad( c->argv[1], &ap.ap_mem, &text ) ) {
 			snprintf( c->cr_msg, sizeof( c->cr_msg ), "%s attribute description unknown: \"%s\"",
@@ -110,14 +110,10 @@ static int dgroup_cf( ConfigArgs *c )
 		 * anything this instance of the overlay needs.
 		 */
 		a2 = ch_malloc( sizeof(adpair) );
-
-		for ( app = &on->on_bi.bi_private; *app; app = &(*app)->ap_next )
-			/* Get to the end */ ;
-
+		a2->ap_next = on->on_bi.bi_private;
 		a2->ap_mem = ap.ap_mem;
 		a2->ap_uri = ap.ap_uri;
-		a2->ap_next = *app;
-		*app = a2;
+		on->on_bi.bi_private = a2;
 		rc = 0;
 		}
 	}
