@@ -206,7 +206,7 @@ tlso_ca_list( char * bundle, char * dir, X509 *cert )
 static int
 tlso_init( void )
 {
-	struct ldapoptions *lo = LDAP_INT_GLOBAL_OPT();   
+	struct ldapoptions *lo = LDAP_INT_GLOBAL_OPT();
 #ifdef HAVE_EBCDIC
 	{
 		char *file = LDAP_STRDUP( lo->ldo_tls_randfile );
@@ -240,7 +240,7 @@ tlso_init( void )
 static void
 tlso_destroy( void )
 {
-	struct ldapoptions *lo = LDAP_INT_GLOBAL_OPT();   
+	struct ldapoptions *lo = LDAP_INT_GLOBAL_OPT();
 
 	BIO_meth_free( tlso_bio_method );
 
@@ -290,6 +290,7 @@ tlso_stecpy( char *dst, const char *src, const char *end )
 	return dst;
 }
 
+#if 0
 /* OpenSSL 1.1.1 uses a separate API for TLS1.3 ciphersuites.
  * Try to find any TLS1.3 ciphers in the given list of suites.
  */
@@ -347,6 +348,8 @@ tlso_ctx_cipher13( tlso_ctx *ctx, char *suites )
 	if ( tls13_suites[0] )
 		SSL_CTX_set_ciphersuites( ctx, tls13_suites );
 }
+#endif
+
 #endif /* OpenSSL 1.1.1 */
 
 /*
@@ -416,7 +419,7 @@ tlso_ctx_init( struct ldapoptions *lo, struct ldaptls *lt, int is_server )
 
 	if ( lo->ldo_tls_ciphersuite ) {
 #if OPENSSL_VERSION_NUMBER >= 0x10101000
-		tlso_ctx_cipher13( ctx, lt->lt_ciphersuite );
+		// tlso_ctx_cipher13( ctx, lt->lt_ciphersuite );
 #endif
 		if ( !SSL_CTX_set_cipher_list( ctx, lt->lt_ciphersuite ) )
 		{
@@ -611,7 +614,7 @@ tlso_ctx_init( struct ldapoptions *lo, struct ldaptls *lt, int is_server )
 		if ( lo->ldo_tls_crlcheck == LDAP_OPT_X_TLS_CRL_PEER ) {
 			X509_STORE_set_flags( x509_s, X509_V_FLAG_CRL_CHECK );
 		} else if ( lo->ldo_tls_crlcheck == LDAP_OPT_X_TLS_CRL_ALL ) {
-			X509_STORE_set_flags( x509_s, 
+			X509_STORE_set_flags( x509_s,
 					X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL  );
 		}
 	}
@@ -685,12 +688,12 @@ tlso_session_errmsg( tls_session *sess, int rc, char *buf, size_t len )
 	rc = ERR_peek_error();
 	if ( rc ) {
 		ERR_error_string_n( rc, err, sizeof(err) );
-		if ( ( ERR_GET_LIB(rc) == ERR_LIB_SSL ) && 
+		if ( ( ERR_GET_LIB(rc) == ERR_LIB_SSL ) &&
 				( ERR_GET_REASON(rc) == SSL_R_CERTIFICATE_VERIFY_FAILED ) ) {
 			int certrc = SSL_get_verify_result(s);
 			certerr = (char *)X509_verify_cert_error_string(certrc);
 		}
-		snprintf(buf, len, "%s%s%s%s", err, certerr ? " (" :"", 
+		snprintf(buf, len, "%s%s%s%s", err, certerr ? " (" :"",
 				certerr ? certerr : "", certerr ?  ")" : "" );
 		return buf;
 	}
@@ -707,7 +710,7 @@ tlso_session_my_dn( tls_session *sess, struct berval *der_dn )
 	x = SSL_get_certificate( s );
 
 	if (!x) return LDAP_INVALID_CREDENTIALS;
-	
+
 	xn = X509_get_subject_name(x);
 #if OPENSSL_VERSION_NUMBER < 0x10100000
 	der_dn->bv_len = i2d_X509_NAME( xn, NULL );
@@ -803,7 +806,7 @@ tlso_session_chkhost( LDAP *ld, tls_session *sess, const char *name_in )
 #ifdef LDAP_PF_INET6
 	if (inet_pton(AF_INET6, name, &addr)) {
 		ntype = IS_IP6;
-	} else 
+	} else
 #endif
 	if ((ptr = strrchr(name, '.')) && isdigit((unsigned char)ptr[1])) {
 		if (inet_aton(name, (struct in_addr *)&addr)) ntype = IS_IP4;
@@ -971,7 +974,7 @@ no_cn:
 
 		if( ret == LDAP_LOCAL_ERROR ) {
 			Debug3( LDAP_DEBUG_ANY, "TLS: hostname (%s) does not match "
-				"common name in certificate (%.*s).\n", 
+				"common name in certificate (%.*s).\n",
 				name, cn->length, cn->data );
 			ret = LDAP_CONNECT_ERROR;
 			if ( ld->ld_error ) {
@@ -1036,7 +1039,7 @@ tlso_session_endpoint( tls_session *sess, struct berval *buf, int is_server )
 
 	/* See RFC 5929 */
 	if ( md == NULL ||
-	     md == EVP_md_null() ||
+	     /// md == EVP_md_null() ||
 #ifndef OPENSSL_NO_MD2
 	     md == EVP_md2() ||
 #endif
@@ -1209,7 +1212,7 @@ tlso_bio_read( BIO *b, char *buf, int len )
 {
 	struct tls_data		*p;
 	int			ret;
-		
+
 	if ( buf == NULL || len <= 0 ) return 0;
 
 	p = (struct tls_data *)BIO_get_data(b);
@@ -1236,9 +1239,9 @@ tlso_bio_write( BIO *b, const char *buf, int len )
 {
 	struct tls_data		*p;
 	int			ret;
-	
+
 	if ( buf == NULL || len <= 0 ) return 0;
-	
+
 	p = (struct tls_data *)BIO_get_data(b);
 
 	if ( p == NULL || p->sbiod == NULL ) {
@@ -1308,7 +1311,7 @@ tlso_sb_setup( Sockbuf_IO_Desc *sbiod, void *arg )
 	if ( p == NULL ) {
 		return -1;
 	}
-	
+
 	p->session = arg;
 	p->sbiod = sbiod;
 	bio = BIO_new( tlso_bio_method );
@@ -1322,7 +1325,7 @@ static int
 tlso_sb_remove( Sockbuf_IO_Desc *sbiod )
 {
 	struct tls_data		*p;
-	
+
 	assert( sbiod != NULL );
 	assert( sbiod->sbiod_pvt != NULL );
 
@@ -1337,7 +1340,7 @@ static int
 tlso_sb_close( Sockbuf_IO_Desc *sbiod )
 {
 	struct tls_data		*p;
-	
+
 	assert( sbiod != NULL );
 	assert( sbiod->sbiod_pvt != NULL );
 
@@ -1350,12 +1353,12 @@ static int
 tlso_sb_ctrl( Sockbuf_IO_Desc *sbiod, int opt, void *arg )
 {
 	struct tls_data		*p;
-	
+
 	assert( sbiod != NULL );
 	assert( sbiod->sbiod_pvt != NULL );
 
 	p = (struct tls_data *)sbiod->sbiod_pvt;
-	
+
 	if ( opt == LBER_SB_OPT_GET_SSL ) {
 		*((tlso_session **)arg) = p->session;
 		return 1;
@@ -1365,7 +1368,7 @@ tlso_sb_ctrl( Sockbuf_IO_Desc *sbiod, int opt, void *arg )
 			return 1;
 		}
 	}
-	
+
 	return LBER_SBIOD_CTRL_NEXT( sbiod, opt, arg );
 }
 
